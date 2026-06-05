@@ -23,6 +23,10 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
+#define CLAY_IMPLEMENTATION
+#include "lib/clay.h"
+
+
 struct wm_server {
     struct wl_display *wl_display;
     struct wlr_backend *backend;
@@ -36,7 +40,6 @@ struct wm_server {
     struct wl_listener new_xdg_popup;
     struct wl_list toplevels;
 
-    
 	struct wlr_seat *seat;
 	struct wl_listener new_input;
 	struct wl_listener request_cursor;
@@ -92,6 +95,21 @@ struct wm_keyboard {
     struct wl_listener key;
     struct wl_listener destroy;
 };
+
+
+
+static void WM_RenderClayCommands(struct wm_toplevel *toplevel, Clay_RenderCommandArray *rcommands){
+    for (size_t i=0; i<rcommands->length; i++){
+        Clay_RenderCommand *rcmd = Clay_RenderCommandArray_Get(rcommands, i);
+        const Clay_BoundingBox bounding_box = rcmd->boundingBox;
+
+        if(rcmd->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE){
+            wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.x, bounding_box.y);
+        }
+    }
+}
+
+
 
 static void focus_toplevel(struct wm_toplevel *toplevel) {
 	/* Note: this function only deals with keyboard focus. */
@@ -214,7 +232,6 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
     }
 }
 
-
 static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
     /* This event is raised by the keyboard base wlr_input_device to signal
     * the destruction of the wlr_keyboard. It will no longer receive events
@@ -318,6 +335,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
     /* This function is called every time an output is ready to display a frame,
     * generally at the output's refresh rate (e.g. 60Hz). */
     struct wm_output *output = wl_container_of(listener, output, frame);
+    struct wlr_output *wlr_output = data;
     struct wlr_scene *scene = output->server->scene;
 
     struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(
@@ -399,8 +417,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	 * display, which Wayland clients can see to find out information about the
 	 * output (such as DPI, scale factor, manufacturer, etc).
 	 */
-	struct wlr_output_layout_output *l_output = wlr_output_layout_add_auto(server->output_layout,
-		wlr_output);
+	struct wlr_output_layout_output *l_output = wlr_output_layout_add(server->output_layout,
+		wlr_output, -100, 0);
 	struct wlr_scene_output *scene_output = wlr_scene_output_create(server->scene, wlr_output);
 	wlr_scene_output_layout_add_output(server->scene_layout, l_output, scene_output);
 }
@@ -460,8 +478,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	struct wm_toplevel *toplevel = calloc(1, sizeof(*toplevel));
 	toplevel->server = server;
 	toplevel->xdg_toplevel = xdg_toplevel;
-	toplevel->scene_tree =
-		wlr_scene_xdg_surface_create(&toplevel->server->scene->tree, xdg_toplevel->base);
+	toplevel->scene_tree = wlr_scene_xdg_surface_create(&toplevel->server->scene->tree, xdg_toplevel->base);
 	toplevel->scene_tree->node.data = toplevel;
 	xdg_toplevel->base->data = toplevel->scene_tree;
 
@@ -549,18 +566,6 @@ int main(int argc, char *argv[])
 	server.new_input.notify = server_new_input;
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
-
-    /*
-	server.request_cursor.notify = seat_request_cursor;
-	wl_signal_add(&server.seat->events.request_set_cursor,
-			&server.request_cursor);
-	server.pointer_focus_change.notify = seat_pointer_focus_change;
-	wl_signal_add(&server.seat->pointer_state.events.focus_change,
-			&server.pointer_focus_change);
-	server.request_set_selection.notify = seat_request_set_selection;
-	wl_signal_add(&server.seat->events.request_set_selection,
-			&server.request_set_selection);
-    */
 
 	const char *socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {

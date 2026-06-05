@@ -8,11 +8,11 @@ LIBS!=$(PKG_CONFIG) --libs $(PKGS)
 all: test
 
 main.o: src/main.c
-	$(CC) -c $< -g -Werror $(CFLAGS) -I. -DWLR_USE_UNSTABLE -o $@
+	$(CC) -c $< -g -Werror $(CFLAGS) -I. -DWLR_USE_UNSTABLE -o build/$@
 test: main.o
-	$(CC) $^ -g -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) -o $@
+	$(CC) build/$^ -g -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) -o build/$@
 
 clean:
-	rm -f test main.o
+	rm -f build/*
 
 .PHONY: all clean
