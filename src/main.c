@@ -96,20 +96,64 @@ struct wm_keyboard {
     struct wl_listener destroy;
 };
 
+struct window{
+    Clay_ElementId clay_id;
+    struct wm_toplevel* toplevel;
+    int posx, posy;
+    int sizex, sizey;
+};
 
+int windowCount = 0;
+struct window **windows;
 
-static void WM_RenderClayCommands(struct wm_toplevel *toplevel, Clay_RenderCommandArray *rcommands){
+void ClayWindow(Clay_ElementId id){
+    CLAY(id, {
+        .layout = {
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+            .padding = CLAY_PADDING_ALL(10)
+        }
+    }){};
+}
+
+Clay_RenderCommandArray CreateClayLayout(){
+    Clay_BeginLayout();
+
+    CLAY(CLAY_ID("MainContainer"), {
+        .layout = {
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+            .padding = CLAY_PADDING_ALL(10),
+            .childGap = 10
+        }
+    }){
+        for(int i=0;i<windowCount;i++){
+            ClayWindow(windows[i]->clay_id);
+        }
+
+    };
+
+    return Clay_EndLayout(1.0f);
+}
+
+static void WM_RenderClayCommands(Clay_RenderCommandArray *rcommands){
+    int drawnWindows = 0;
     for (size_t i=0; i<rcommands->length; i++){
         Clay_RenderCommand *rcmd = Clay_RenderCommandArray_Get(rcommands, i);
         const Clay_BoundingBox bounding_box = rcmd->boundingBox;
 
         if(rcmd->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE){
-            wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.x, bounding_box.y);
+            if(drawnWindows<windowCount){
+                struct wm_toplevel *toplevel = windows[drawnWindows]->toplevel;
+                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.width, bounding_box.height);
+                windows[drawnWindows]->posx = bounding_box.x;
+                windows[drawnWindows]->posy = bounding_box.y;
+                wlr_scene_node_set_position(&toplevel->scene_tree->node, bounding_box.x, bounding_box.y);
+                drawnWindows++;
+            }
         }
     }
 }
-
-
 
 static void focus_toplevel(struct wm_toplevel *toplevel) {
 	/* Note: this function only deals with keyboard focus. */
@@ -341,6 +385,9 @@ static void output_frame(struct wl_listener *listener, void *data) {
     struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(
         scene, output->wlr_output);
 
+    Clay_RenderCommandArray renderCommands = CreateClayLayout();
+    WM_RenderClayCommands(&renderCommands);
+
     /* Render the scene if needed and commit the output */
     wlr_scene_output_commit(scene_output, NULL);
 
@@ -482,6 +529,13 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	toplevel->scene_tree->node.data = toplevel;
 	xdg_toplevel->base->data = toplevel->scene_tree;
 
+    printf("settn up window\n");
+    windows[windowCount] = malloc(sizeof(struct window));
+    windows[windowCount]->toplevel = toplevel;
+    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
+    windowCount += 1;
+    printf("window set up\n");
+
 	/* Listen to the various events it can emit */
 	toplevel->map.notify = xdg_toplevel_map;
 	wl_signal_add(&xdg_toplevel->base->surface->events.map, &toplevel->map);
@@ -495,6 +549,52 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
 }
 
+static void xdg_popup_commit(struct wl_listener *listener, void *data) {
+	/* Called when a new surface state is committed. */
+	struct wm_popup *popup = wl_container_of(listener, popup, commit);
+
+	if (popup->xdg_popup->base->initial_commit) {
+		/* When an xdg_surface performs an initial commit, the compositor must
+		 * reply with a configure so the client can map the surface.
+		 * tinywl sends an empty configure. A more sophisticated compositor
+		 * might change an xdg_popup's geometry to ensure it's not positioned
+		 * off-screen, for example. */
+		wlr_xdg_surface_schedule_configure(popup->xdg_popup->base);
+	}
+}
+
+static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
+	/* Called when the xdg_popup is destroyed. */
+	struct wm_popup *popup = wl_container_of(listener, popup, destroy);
+
+	wl_list_remove(&popup->commit.link);
+	wl_list_remove(&popup->destroy.link);
+}
+	
+
+static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
+	/* This event is raised when a client creates a new popup. */
+	struct wlr_xdg_popup *xdg_popup = data;
+
+	struct wm_popup *popup = calloc(1, sizeof(*popup));
+	popup->xdg_popup = xdg_popup;
+
+	/* We must add xdg popups to the scene graph so they get rendered. The
+	 * wlroots scene graph provides a helper for this, but to use it we must
+	 * provide the proper parent scene node of the xdg popup. To enable this,
+	 * we always set the user data field of xdg_surfaces to the corresponding
+	 * scene node. */
+	struct wlr_xdg_surface *parent = wlr_xdg_surface_try_from_wlr_surface(xdg_popup->parent);
+	assert(parent != NULL);
+	struct wlr_scene_tree *parent_tree = parent->data;
+	xdg_popup->base->data = wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
+
+	popup->commit.notify = xdg_popup_commit;
+	wl_signal_add(&xdg_popup->base->surface->events.commit, &popup->commit);
+
+	popup->destroy.notify = xdg_popup_destroy;
+	wl_signal_add(&xdg_popup->events.destroy, &popup->destroy);
+}
 
 
 int main(int argc, char *argv[])
@@ -519,6 +619,22 @@ int main(int argc, char *argv[])
     }
 
     struct wm_server server = {0};
+
+    windows = malloc(sizeof(struct window*) * 100);
+    if (!windows) {
+        fprintf(stderr, "Failed to allocate windows array\n");
+        return 1;
+    }
+    windowCount = 0;
+
+    uint64_t totalMemorySize = Clay_MinMemorySize();
+    Clay_Arena clayMemory = (Clay_Arena) {
+        .memory = malloc(totalMemorySize),
+        .capacity = totalMemorySize
+    };
+
+    int width, height;
+    Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920.0f, 1080.0f  }, (Clay_ErrorHandler) { 0 });
 
     server.wl_display = wl_display_create();
 
@@ -559,7 +675,7 @@ int main(int argc, char *argv[])
 	server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
 	server.new_xdg_toplevel.notify = server_new_xdg_toplevel;
 	wl_signal_add(&server.xdg_shell->events.new_toplevel, &server.new_xdg_toplevel);
-	//server.new_xdg_popup.notify = server_new_xdg_popup;
+	server.new_xdg_popup.notify = server_new_xdg_popup;
 	wl_signal_add(&server.xdg_shell->events.new_popup, &server.new_xdg_popup);
 
 	wl_list_init(&server.keyboards);
@@ -596,7 +712,7 @@ int main(int argc, char *argv[])
 	wl_list_remove(&server.new_xdg_popup.link);
 
 	wl_list_remove(&server.new_input.link);
-	wl_list_remove(&server.request_cursor.link);
+	//wl_list_remove(&server.request_cursor.link);
 	wl_list_remove(&server.pointer_focus_change.link);
 	wl_list_remove(&server.request_set_selection.link);
 
@@ -607,5 +723,6 @@ int main(int argc, char *argv[])
 	wlr_renderer_destroy(server.renderer);
 	wlr_backend_destroy(server.backend);
 	wl_display_destroy(server.wl_display);
+    free(windows); 
 	return 0;
 }
