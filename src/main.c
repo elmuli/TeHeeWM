@@ -112,7 +112,7 @@ void ClayWindow(Clay_ElementId id){
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
-            .padding = CLAY_PADDING_ALL(10)
+            .padding = CLAY_PADDING_ALL(0)
         }
     }){};
 }
@@ -124,11 +124,13 @@ Clay_RenderCommandArray CreateClayLayout(){
         .layout = {
             .layoutDirection = CLAY_LEFT_TO_RIGHT,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
-            .padding = CLAY_PADDING_ALL(10),
-            .childGap = 10
+            .padding = CLAY_PADDING_ALL(5),
+            .childGap = 5
         }
     }){
-        ClayWindow(windows[0]->clay_id);
+        for (int i=0;i<windowCount;i++){
+            ClayWindow(windows[i]->clay_id);
+        }
 
     };
 
@@ -136,7 +138,7 @@ Clay_RenderCommandArray CreateClayLayout(){
 }
 
 static void WM_RenderClayCommands(Clay_RenderCommandArray *rcommands){
-    
+
     for(int i=0;i<windowCount;i++){
         struct window *window = windows[i];
         struct wm_toplevel *toplevel = window->toplevel;
@@ -145,32 +147,11 @@ static void WM_RenderClayCommands(Clay_RenderCommandArray *rcommands){
         window->sizey = element.boundingBox.height;
         window->posx = element.boundingBox.x;
         window->posy = element.boundingBox.y;
+        //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
+        wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
+        wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
     }
 
-    /*
-    int drawnWindows = 0;
-    printf("clay rendercommands\n");
-    for (size_t i=1; i<rcommands->length; i++){
-        printf("render command %i\n", i);
-        Clay_RenderCommand *rcmd = Clay_RenderCommandArray_Get(rcommands, i);
-        const Clay_BoundingBox bounding_box = rcmd->boundingBox;
-            struct wm_toplevel *toplevel = windows[drawnWindows]->toplevel;
-            printf("window %d: %dx%d at %d,%d\n",
-            drawnWindows,
-            bounding_box.width,
-            bounding_box.height,
-            bounding_box.x,
-            bounding_box.y);
-
-        if(drawnWindows<windowCount){
-            wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.width, bounding_box.height);
-            windows[drawnWindows]->posx = bounding_box.x;
-            windows[drawnWindows]->posy = bounding_box.y;
-            wlr_scene_node_set_position(&toplevel->scene_tree->node, -bounding_box.x, -bounding_box.y);
-            drawnWindows++;
-        }
-    }
-    */
 }
 
 static void focus_toplevel(struct wm_toplevel *toplevel) {
@@ -486,8 +467,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	 * display, which Wayland clients can see to find out information about the
 	 * output (such as DPI, scale factor, manufacturer, etc).
 	 */
-	struct wlr_output_layout_output *l_output = wlr_output_layout_add(server->output_layout,
-		wlr_output, -100, 0);
+	struct wlr_output_layout_output *l_output = wlr_output_layout_add_auto(server->output_layout,
+		wlr_output);
 	struct wlr_scene_output *scene_output = wlr_scene_output_create(server->scene, wlr_output);
 	wlr_scene_output_layout_add_output(server->scene_layout, l_output, scene_output);
 }
@@ -528,10 +509,6 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
         wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
 	}
 
-    windows[windowCount] = malloc(sizeof(struct window));
-    windows[windowCount]->toplevel = toplevel;
-    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
-    windowCount += 1;
 
     Clay_RenderCommandArray renderCommands = CreateClayLayout();
     WM_RenderClayCommands(&renderCommands);
@@ -578,6 +555,10 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	toplevel->destroy.notify = xdg_toplevel_destroy;
 	wl_signal_add(&xdg_toplevel->events.destroy, &toplevel->destroy);
 
+    windows[windowCount] = malloc(sizeof(struct window));
+    windows[windowCount]->toplevel = toplevel;
+    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
+    windowCount += 1;
 }
 
 static void xdg_popup_commit(struct wl_listener *listener, void *data) {
