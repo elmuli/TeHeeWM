@@ -105,6 +105,7 @@ struct window{
 
 int windowCount = 0;
 struct window **windows;
+const char *socket;
 
 void ClayWindow(Clay_ElementId id){
     CLAY(id, {
@@ -127,9 +128,7 @@ Clay_RenderCommandArray CreateClayLayout(){
             .childGap = 10
         }
     }){
-        for(int i=0;i<windowCount;i++){
-            ClayWindow(windows[i]->clay_id);
-        }
+        ClayWindow(windows[0]->clay_id);
 
     };
 
@@ -137,22 +136,41 @@ Clay_RenderCommandArray CreateClayLayout(){
 }
 
 static void WM_RenderClayCommands(Clay_RenderCommandArray *rcommands){
+    
+    for(int i=0;i<windowCount;i++){
+        struct window *window = windows[i];
+        struct wm_toplevel *toplevel = window->toplevel;
+        Clay_ElementData element = Clay_GetElementData(window->clay_id);
+        window->sizex = element.boundingBox.width;
+        window->sizey = element.boundingBox.height;
+        window->posx = element.boundingBox.x;
+        window->posy = element.boundingBox.y;
+    }
+
+    /*
     int drawnWindows = 0;
-    for (size_t i=0; i<rcommands->length; i++){
+    printf("clay rendercommands\n");
+    for (size_t i=1; i<rcommands->length; i++){
+        printf("render command %i\n", i);
         Clay_RenderCommand *rcmd = Clay_RenderCommandArray_Get(rcommands, i);
         const Clay_BoundingBox bounding_box = rcmd->boundingBox;
+            struct wm_toplevel *toplevel = windows[drawnWindows]->toplevel;
+            printf("window %d: %dx%d at %d,%d\n",
+            drawnWindows,
+            bounding_box.width,
+            bounding_box.height,
+            bounding_box.x,
+            bounding_box.y);
 
-        if(rcmd->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE){
-            if(drawnWindows<windowCount){
-                struct wm_toplevel *toplevel = windows[drawnWindows]->toplevel;
-                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.width, bounding_box.height);
-                windows[drawnWindows]->posx = bounding_box.x;
-                windows[drawnWindows]->posy = bounding_box.y;
-                wlr_scene_node_set_position(&toplevel->scene_tree->node, bounding_box.x, bounding_box.y);
-                drawnWindows++;
-            }
+        if(drawnWindows<windowCount){
+            wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, bounding_box.width, bounding_box.height);
+            windows[drawnWindows]->posx = bounding_box.x;
+            windows[drawnWindows]->posy = bounding_box.y;
+            wlr_scene_node_set_position(&toplevel->scene_tree->node, -bounding_box.x, -bounding_box.y);
+            drawnWindows++;
         }
     }
+    */
 }
 
 static void focus_toplevel(struct wm_toplevel *toplevel) {
@@ -236,6 +254,12 @@ static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
         struct wm_toplevel *next_toplevel =
             wl_container_of(server->toplevels.prev, next_toplevel, link);
         focus_toplevel(next_toplevel);
+        break;
+    case XKB_KEY_F2:
+        setenv("WAYLAND_DISPLAY", socket, true);
+        if (fork() == 0) {
+            execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
+        }
         break;
     default:
         return false;
@@ -385,8 +409,6 @@ static void output_frame(struct wl_listener *listener, void *data) {
     struct wlr_scene_output *scene_output = wlr_scene_get_scene_output(
         scene, output->wlr_output);
 
-    Clay_RenderCommandArray renderCommands = CreateClayLayout();
-    WM_RenderClayCommands(&renderCommands);
 
     /* Render the scene if needed and commit the output */
     wlr_scene_output_commit(scene_output, NULL);
@@ -474,6 +496,10 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
+
+    Clay_RenderCommandArray renderCommands = CreateClayLayout();
+    WM_RenderClayCommands(&renderCommands);
+
 	wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
 
 	focus_toplevel(toplevel);
@@ -485,6 +511,9 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 
 
 	wl_list_remove(&toplevel->link);
+
+    Clay_RenderCommandArray renderCommands = CreateClayLayout();
+    WM_RenderClayCommands(&renderCommands);
 }
 
 static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
@@ -496,8 +525,16 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 		 * reply with a configure so the client can map the surface. tinywl
 		 * configures the xdg_toplevel with 0,0 size to let the client pick the
 		 * dimensions itself. */
-		wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 500, 500);
+        wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
 	}
+
+    windows[windowCount] = malloc(sizeof(struct window));
+    windows[windowCount]->toplevel = toplevel;
+    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
+    windowCount += 1;
+
+    Clay_RenderCommandArray renderCommands = CreateClayLayout();
+    WM_RenderClayCommands(&renderCommands);
 }
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
@@ -529,12 +566,6 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	toplevel->scene_tree->node.data = toplevel;
 	xdg_toplevel->base->data = toplevel->scene_tree;
 
-    printf("settn up window\n");
-    windows[windowCount] = malloc(sizeof(struct window));
-    windows[windowCount]->toplevel = toplevel;
-    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
-    windowCount += 1;
-    printf("window set up\n");
 
 	/* Listen to the various events it can emit */
 	toplevel->map.notify = xdg_toplevel_map;
@@ -633,7 +664,6 @@ int main(int argc, char *argv[])
         .capacity = totalMemorySize
     };
 
-    int width, height;
     Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920.0f, 1080.0f  }, (Clay_ErrorHandler) { 0 });
 
     server.wl_display = wl_display_create();
@@ -683,7 +713,7 @@ int main(int argc, char *argv[])
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
 
-	const char *socket = wl_display_add_socket_auto(server.wl_display);
+	socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {
 		wlr_backend_destroy(server.backend);
 		return 1;
