@@ -110,16 +110,16 @@ struct window{
 
 Clay_ElementDeclaration containerLayoutConfigVertical = (Clay_ElementDeclaration){
     .layout = {
-        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
         .padding = {5,5,5,5}
     },
 };
 
 Clay_ElementDeclaration containerLayoutConfigHorizontal = (Clay_ElementDeclaration){
     .layout = {
-        .layoutDirection = CLAY_LEFT_TO_RIGHT,
-        .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
         .padding = {5,5,5,5}
     },
 };
@@ -148,6 +148,7 @@ void ClayWindow(Clay_ElementId id){
 }
 
 Clay_RenderCommandArray CreateClayLayout(){
+
     Clay_BeginLayout();
 
     CLAY(CLAY_ID("MainContainer"), {
@@ -159,7 +160,7 @@ Clay_RenderCommandArray CreateClayLayout(){
         }
     }){
         for (int k=0;k<containerCount;k++){
-            CLAY(containers[k]->clay_id, containerLayoutConfigHorizontal){
+            CLAY(containers[k]->clay_id, containers[k]->layoutConfig){
                 for (int i=0;i<containers[k]->windowCount;i++){
                     ClayWindow(containers[k]->windows[i]->clay_id);
                 }
@@ -195,6 +196,19 @@ static void WM_RenderClay(){
 
 }
 
+void removeContainerFromArray(int index){
+    if(index<0 || index>=containerCount){
+        fprintf(stderr, "Error: Invalid container index %d\n", index);
+        return;
+    }
+
+    for (int i = index; i < containerCount - 1; i++) {
+        containers[i] = containers[i + 1];
+    }
+
+    containerCount--;
+}
+
 void removeWindowFromArray(int index, int parentIndex) {
     printf("removing a window %i, from container %i\n", index, parentIndex);
     struct container *container = containers[parentIndex];
@@ -210,6 +224,9 @@ void removeWindowFromArray(int index, int parentIndex) {
     container->windowCount--;
 
     container->windows[container->windowCount]->toplevel = NULL;
+    if (container->windowCount == 0){
+        removeContainerFromArray(parentIndex);
+    }
 }
 
 void CreateContainer(Clay_ElementDeclaration config){
@@ -323,13 +340,13 @@ static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
             execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
         }
         break;
-    case XKB_KEY_L:
+    case XKB_KEY_F3:
         focus_next_container(selectedContainerIndex);
         break;
-    case XKB_KEY_H:
+    case XKB_KEY_F4:
         CreateContainer(containerLayoutConfigHorizontal);
         break;
-    case XKB_KEY_V:
+    case XKB_KEY_F5:
         CreateContainer(containerLayoutConfigVertical);
         break;
     default:
@@ -741,7 +758,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to allocate windows array\n");
         return 1;
     }
-    CreateContainer(containerLayoutConfigHorizontal);
+    CreateContainer(containerLayoutConfigVertical);
     printf("containers created and memory reserve");
 
     uint64_t totalMemorySize = Clay_MinMemorySize();
