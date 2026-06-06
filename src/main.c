@@ -499,6 +499,11 @@ static void output_frame(struct wl_listener *listener, void *data) {
 
 
     /* Render the scene if needed and commit the output */ 
+
+    uint32_t width, height;
+    wlr_output_effective_resolution(output->wlr_output, &width, &height);
+    Clay_SetLayoutDimensions((Clay_Dimensions) { (float) width, (float) height });
+
     WM_RenderClay();
     wlr_scene_output_commit(scene_output, NULL);
 
@@ -565,6 +570,12 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wl_signal_add(&wlr_output->events.destroy, &output->destroy);
 
 	wl_list_insert(&server->outputs, &output->link);
+
+    struct wm_output *output2 = wl_container_of(server->outputs.next, output, link);
+    uint32_t width, height;
+    wlr_output_effective_resolution(output2->wlr_output, &width, &height);
+    printf("output size %dx%d\n", width, height);
+    Clay_SetLayoutDimensions((Clay_Dimensions) { (float) width, (float) height });
 
 	/* Adds this to the output layout. The add_auto function arranges outputs
 	 * from left-to-right in the order they appear. A more sophisticated
@@ -752,22 +763,8 @@ int main(int argc, char *argv[])
 
     struct wm_server server = {0};
 
-    printf("reserving memory for containers\n");
-    containers = malloc(sizeof(struct container*) * 20);
-    if (!containers) {
-        fprintf(stderr, "Failed to allocate windows array\n");
-        return 1;
-    }
-    CreateContainer(containerLayoutConfigVertical);
-    printf("containers created and memory reserve");
+    
 
-    uint64_t totalMemorySize = Clay_MinMemorySize();
-    Clay_Arena clayMemory = (Clay_Arena) {
-        .memory = malloc(totalMemorySize),
-        .capacity = totalMemorySize
-    };
-
-    Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920.0f, 1080.0f  }, (Clay_ErrorHandler) { 0 });
 
     server.wl_display = wl_display_create();
 
@@ -815,6 +812,26 @@ int main(int argc, char *argv[])
 	server.new_input.notify = server_new_input;
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
+
+
+
+    printf("reserving memory for containers\n");
+    containers = malloc(sizeof(struct container*) * 20);
+    if (!containers) {
+        fprintf(stderr, "Failed to allocate windows array\n");
+        return 1;
+    }
+    CreateContainer(containerLayoutConfigVertical);
+    printf("containers created and memory reserve");
+
+    uint64_t totalMemorySize = Clay_MinMemorySize();
+    Clay_Arena clayMemory = (Clay_Arena) {
+        .memory = malloc(totalMemorySize),
+        .capacity = totalMemorySize
+    };
+
+    Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920,  1080 }, (Clay_ErrorHandler) { 0 });
+
 
 	socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {
