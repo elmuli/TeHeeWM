@@ -742,9 +742,11 @@ static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
 
 int main(int argc, char *argv[])
 {
+    printf("start log\n");
     wlr_log_init(WLR_DEBUG, NULL);
     char *startup_cmd = NULL;
 
+    printf("parse input\n");
     int c;
     while ((c = getopt(argc, argv, "s:h")) != -1) {
         switch (c) {
@@ -763,8 +765,7 @@ int main(int argc, char *argv[])
 
     struct wm_server server = {0};
 
-    
-
+    printf("setup wlroots\n");
 
     server.wl_display = wl_display_create();
 
