@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
@@ -96,15 +97,44 @@ struct wm_keyboard {
     struct wl_listener destroy;
 };
 
+#define MAX_WINDOW_COUNT
+
 struct window{
     Clay_ElementId clay_id;
     struct wm_toplevel* toplevel;
     int posx, posy;
     int sizex, sizey;
+    int parentContainerIndex;
 };
 
-int windowCount = 0;
-struct window **windows;
+
+Clay_ElementDeclaration containerLayoutConfigVertical = (Clay_ElementDeclaration){
+    .layout = {
+        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+        .padding = {5,5,5,5}
+    },
+};
+
+Clay_ElementDeclaration containerLayoutConfigHorizontal = (Clay_ElementDeclaration){
+    .layout = {
+        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
+        .padding = {5,5,5,5}
+    },
+};
+
+struct container{
+    Clay_ElementDeclaration layoutConfig;
+    Clay_ElementId clay_id;
+    int windowCount;
+    struct window **windows;
+};
+
+int containerCount = 0;
+struct container **containers;
+int selectedContainerIndex = 0;
+
 const char *socket;
 
 void ClayWindow(Clay_ElementId id){
@@ -128,8 +158,12 @@ Clay_RenderCommandArray CreateClayLayout(){
             .childGap = 5
         }
     }){
-        for (int i=0;i<windowCount;i++){
-            ClayWindow(windows[i]->clay_id);
+        for (int k=0;k<containerCount;k++){
+            CLAY(containers[k]->clay_id, containerLayoutConfigHorizontal){
+                for (int i=0;i<containers[k]->windowCount;i++){
+                    ClayWindow(containers[k]->windows[i]->clay_id);
+                }
+            }
         }
 
     };
@@ -137,21 +171,68 @@ Clay_RenderCommandArray CreateClayLayout(){
     return Clay_EndLayout(1.0f);
 }
 
-static void WM_RenderClayCommands(Clay_RenderCommandArray *rcommands){
+static void WM_RenderClay(){
 
-    for(int i=0;i<windowCount;i++){
-        struct window *window = windows[i];
-        struct wm_toplevel *toplevel = window->toplevel;
-        Clay_ElementData element = Clay_GetElementData(window->clay_id);
-        window->sizex = element.boundingBox.width;
-        window->sizey = element.boundingBox.height;
-        window->posx = element.boundingBox.x;
-        window->posy = element.boundingBox.y;
-        //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
-        wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
-        wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
+    for (int k=0;k<containerCount;k++){
+        struct container *container = containers[k];
+        for(int i=0;i<container->windowCount;i++){
+            struct window *window = container->windows[i];
+            if (window->toplevel != NULL){
+                struct wm_toplevel *toplevel = window->toplevel;
+                Clay_ElementData element = Clay_GetElementData(window->clay_id);
+                window->sizex = element.boundingBox.width;
+                window->sizey = element.boundingBox.height;
+                window->posx = element.boundingBox.x;
+                window->posy = element.boundingBox.y;
+                //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
+                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
+                wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
+            }else{
+                printf("toplevel NULL, not drawing\n");
+            }
+        }
     }
 
+}
+
+void removeWindowFromArray(int index, int parentIndex) {
+    printf("removing a window %i, from container %i\n", index, parentIndex);
+    struct container *container = containers[parentIndex];
+    if (index < 0 || index >= container->windowCount) {
+        fprintf(stderr, "Error: Invalid window index %d\n", index);
+        return;
+    }
+
+    for (int i = index; i < container->windowCount - 1; i++) {
+        container->windows[i] = container->windows[i + 1];
+    }
+
+    container->windowCount--;
+
+    container->windows[container->windowCount]->toplevel = NULL;
+}
+
+void CreateContainer(Clay_ElementDeclaration config){
+    printf("creating a container\n");
+    containers[containerCount] = malloc(sizeof(struct container));
+    printf("container allocated\n");
+    containers[containerCount]->layoutConfig = config;
+    containers[containerCount]->clay_id = CLAY_IDI("Container%i", containerCount);
+    printf("clay data created\n");
+    containers[containerCount]->windowCount = 0;
+    containers[containerCount]->windows = malloc(sizeof(struct window*)*40);
+    printf("windwow list allocated\n");
+    selectedContainerIndex = containerCount;
+    containerCount++;
+    printf("new container created\n");
+}
+
+void focus_next_container(int currentFocus){
+    if(currentFocus >= containerCount-1){
+        selectedContainerIndex = 0;
+    }else{
+        selectedContainerIndex = currentFocus+1;
+    }
 }
 
 static void focus_toplevel(struct wm_toplevel *toplevel) {
@@ -241,6 +322,15 @@ static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
         if (fork() == 0) {
             execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
         }
+        break;
+    case XKB_KEY_L:
+        focus_next_container(selectedContainerIndex);
+        break;
+    case XKB_KEY_H:
+        CreateContainer(containerLayoutConfigHorizontal);
+        break;
+    case XKB_KEY_V:
+        CreateContainer(containerLayoutConfigVertical);
         break;
     default:
         return false;
@@ -391,7 +481,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
         scene, output->wlr_output);
 
 
-    /* Render the scene if needed and commit the output */
+    /* Render the scene if needed and commit the output */ 
+    WM_RenderClay();
     wlr_scene_output_commit(scene_output, NULL);
 
     struct timespec now;
@@ -477,24 +568,36 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
-
-    Clay_RenderCommandArray renderCommands = CreateClayLayout();
-    WM_RenderClayCommands(&renderCommands);
-
 	wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
 
 	focus_toplevel(toplevel);
+
+    CreateClayLayout();
 }
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, unmap);
 
+    Clay_ElementId id = CLAY_IDI("Window%i", (intptr_t)toplevel);
+
+    bool foundWindow = false;
+    for(int k=0;k<containerCount;k++){
+        for(int i=0;i<containers[k]->windowCount;i++){
+            if(containers[k]->windows[i]->clay_id.id == id.id){
+                printf("found window %i\n", i);
+                removeWindowFromArray(i, k);
+                printf("removed window %i\n", i);
+                foundWindow = true;
+                break;
+            }
+        }
+        if(foundWindow) break;
+    }
 
 	wl_list_remove(&toplevel->link);
-
-    Clay_RenderCommandArray renderCommands = CreateClayLayout();
-    WM_RenderClayCommands(&renderCommands);
+    printf("unmapped toplevel\n");
+    CreateClayLayout();
 }
 
 static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
@@ -510,24 +613,23 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 	}
 
 
-    Clay_RenderCommandArray renderCommands = CreateClayLayout();
-    WM_RenderClayCommands(&renderCommands);
+    CreateClayLayout();
 }
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_toplevel is destroyed. */
 	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, destroy);
 
+    printf("freeing toplevel links\n");
 	wl_list_remove(&toplevel->map.link);
 	wl_list_remove(&toplevel->unmap.link);
 	wl_list_remove(&toplevel->commit.link);
 	wl_list_remove(&toplevel->destroy.link);
-	wl_list_remove(&toplevel->request_move.link);
-	wl_list_remove(&toplevel->request_resize.link);
-	wl_list_remove(&toplevel->request_maximize.link);
-	wl_list_remove(&toplevel->request_fullscreen.link);
-
-	free(toplevel);
+    printf("freeing toplevel\n");
+    free(toplevel);
+    printf("destroyed and freed toplevel\n");
+    
+    CreateClayLayout();
 }
 
 static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
@@ -555,10 +657,11 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	toplevel->destroy.notify = xdg_toplevel_destroy;
 	wl_signal_add(&xdg_toplevel->events.destroy, &toplevel->destroy);
 
-    windows[windowCount] = malloc(sizeof(struct window));
-    windows[windowCount]->toplevel = toplevel;
-    windows[windowCount]->clay_id = CLAY_IDI("Window%i", windowCount);
-    windowCount += 1;
+    struct container *container = containers[selectedContainerIndex];
+    container->windows[container->windowCount] = malloc(sizeof(struct window));
+    container->windows[container->windowCount]->toplevel = toplevel;
+    container->windows[container->windowCount]->clay_id = CLAY_IDI("Window%i", (intptr_t)toplevel);
+    container->windowCount += 1;
 }
 
 static void xdg_popup_commit(struct wl_listener *listener, void *data) {
@@ -632,12 +735,14 @@ int main(int argc, char *argv[])
 
     struct wm_server server = {0};
 
-    windows = malloc(sizeof(struct window*) * 100);
-    if (!windows) {
+    printf("reserving memory for containers\n");
+    containers = malloc(sizeof(struct container*) * 20);
+    if (!containers) {
         fprintf(stderr, "Failed to allocate windows array\n");
         return 1;
     }
-    windowCount = 0;
+    CreateContainer(containerLayoutConfigHorizontal);
+    printf("containers created and memory reserve");
 
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena clayMemory = (Clay_Arena) {
@@ -713,8 +818,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",
-			socket);
+	wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",socket);
 	wl_display_run(server.wl_display);
 
     wl_display_destroy_clients(server.wl_display);
@@ -724,8 +828,8 @@ int main(int argc, char *argv[])
 
 	wl_list_remove(&server.new_input.link);
 	//wl_list_remove(&server.request_cursor.link);
-	wl_list_remove(&server.pointer_focus_change.link);
-	wl_list_remove(&server.request_set_selection.link);
+	//wl_list_remove(&server.pointer_focus_change.link);
+	//wl_list_remove(&server.request_set_selection.link);
 
 	wl_list_remove(&server.new_output.link);
 
@@ -734,6 +838,6 @@ int main(int argc, char *argv[])
 	wlr_renderer_destroy(server.renderer);
 	wlr_backend_destroy(server.backend);
 	wl_display_destroy(server.wl_display);
-    free(windows); 
+    free(containers);
 	return 0;
 }
