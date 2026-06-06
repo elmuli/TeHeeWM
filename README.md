@@ -6,3 +6,5 @@ sain ensimmäiset ikkunat avattaua ja luotuam oman version tinywl:stä
 
 sain clayn pohjan luotua, mutta veilä ei ikkunoita sillä
 siirrellä
+
+edit. tiling toimii clayn kanssa
