@@ -767,14 +767,21 @@ int main(int argc, char *argv[])
 
     printf("setup wlroots\n");
 
+    printf("Creating display\n");
     server.wl_display = wl_display_create();
+    if(server.wl_display == NULL) {
+        wlr_log(WLR_ERROR, "failed to create wl_display");
+        return 1;
+    }
 
+    printf("Creating backend\n");
     server.backend = wlr_backend_autocreate(wl_display_get_event_loop(server.wl_display), NULL);
     if (server.backend == NULL) {
         wlr_log(WLR_ERROR, "failed to create wlr_backend");
         return 1;
     }
 
+    printf("Creating renderer\n");
     server.renderer = wlr_renderer_autocreate(server.backend);
     if (server.renderer == NULL) {
         wlr_log(WLR_ERROR, "failed to create wlr_renderer");
@@ -790,18 +797,23 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+
+    printf("Setting up compositor\n");
     wlr_compositor_create(server.wl_display, 5, server.renderer);
     wlr_subcompositor_create(server.wl_display);
     wlr_data_device_manager_create(server.wl_display);
 
+    printf("Setting up output\n");
     server.output_layout = wlr_output_layout_create(server.wl_display);
     wl_list_init(&server.outputs);
     server.new_output.notify = server_new_output;
     wl_signal_add(&server.backend->events.new_output, &server.new_output);
 
+    printf("Setting up scene\n");
 	server.scene = wlr_scene_create();
 	server.scene_layout = wlr_scene_attach_output_layout(server.scene, server.output_layout);
 
+    printf("Setting up toplevels and xdg\n");
 	wl_list_init(&server.toplevels);
 	server.xdg_shell = wlr_xdg_shell_create(server.wl_display, 3);
 	server.new_xdg_toplevel.notify = server_new_xdg_toplevel;
@@ -809,12 +821,11 @@ int main(int argc, char *argv[])
 	server.new_xdg_popup.notify = server_new_xdg_popup;
 	wl_signal_add(&server.xdg_shell->events.new_popup, &server.new_xdg_popup);
 
+    printf("Setting up inputs\n");
 	wl_list_init(&server.keyboards);
 	server.new_input.notify = server_new_input;
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
-
-
 
     printf("reserving memory for containers\n");
     containers = malloc(sizeof(struct container*) * 20);
@@ -825,6 +836,8 @@ int main(int argc, char *argv[])
     CreateContainer(containerLayoutConfigVertical);
     printf("containers created and memory reserve");
 
+
+    printf("Setting up CLAY\n");
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena clayMemory = (Clay_Arena) {
         .memory = malloc(totalMemorySize),
