@@ -24,112 +24,7 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
-#define CLAY_IMPLEMENTATION
-#include "lib/clay.h"
-
-
-struct wm_server {
-    struct wl_display *wl_display;
-    struct wlr_backend *backend;
-    struct wlr_renderer *renderer;
-    struct wlr_allocator *allocator;
-    struct wlr_scene *scene;
-    struct wlr_scene_output_layout *scene_layout;
-
-    struct wlr_xdg_shell *xdg_shell;
-    struct wl_listener new_xdg_toplevel;
-    struct wl_listener new_xdg_popup;
-    struct wl_list toplevels;
-
-	struct wlr_seat *seat;
-	struct wl_listener new_input;
-	struct wl_listener request_cursor;
-	struct wl_listener pointer_focus_change;
-	struct wl_listener request_set_selection;
-	struct wl_list keyboards;
-	struct wm_toplevel *grabbed_toplevel;
-	double grab_x, grab_y;
-	struct wlr_box grab_geobox;
-	uint32_t resize_edges;
-
-    struct wlr_output_layout *output_layout;
-    struct wl_list outputs;
-    struct wl_listener new_output;
-};
-
-struct wm_output {
-    struct wl_list link;
-    struct wm_server *server;
-    struct wlr_output *wlr_output;
-    struct wl_listener frame;
-    struct wl_listener request_state;
-    struct wl_listener destroy;
-};
-
-struct wm_toplevel {
-    struct wl_list link;
-    struct wm_server *server;
-    struct wlr_xdg_toplevel *xdg_toplevel;
-    struct wlr_scene_tree *scene_tree;
-    struct wl_listener map;
-    struct wl_listener unmap;
-    struct wl_listener commit;
-    struct wl_listener destroy;
-    struct wl_listener request_move;
-    struct wl_listener request_resize;
-    struct wl_listener request_maximize;
-    struct wl_listener request_fullscreen;
-};
-
-struct wm_popup {
-    struct wlr_xdg_popup *xdg_popup;
-    struct wl_listener commit;
-    struct wl_listener destroy;
-};
-
-struct wm_keyboard {
-    struct wl_list link;
-    struct wm_server *server;
-    struct wlr_keyboard *wlr_keyboard;
-
-    struct wl_listener modifiers;
-    struct wl_listener key;
-    struct wl_listener destroy;
-};
-
-#define MAX_WINDOW_COUNT
-
-struct window{
-    Clay_ElementId clay_id;
-    struct wm_toplevel* toplevel;
-    int posx, posy;
-    int sizex, sizey;
-    int parentContainerIndex;
-};
-
-
-Clay_ElementDeclaration containerLayoutConfigVertical = (Clay_ElementDeclaration){
-    .layout = {
-        .layoutDirection = CLAY_LEFT_TO_RIGHT,
-        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
-        .padding = {5,5,5,5}
-    },
-};
-
-Clay_ElementDeclaration containerLayoutConfigHorizontal = (Clay_ElementDeclaration){
-    .layout = {
-        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
-        .padding = {5,5,5,5}
-    },
-};
-
-struct container{
-    Clay_ElementDeclaration layoutConfig;
-    Clay_ElementId clay_id;
-    int windowCount;
-    struct window **windows;
-};
+#include <main.h>
 
 int containerCount = 0;
 struct container **containers;
@@ -137,127 +32,12 @@ int selectedContainerIndex = 0;
 
 const char *socket;
 
-void ClayWindow(Clay_ElementId id){
-    CLAY(id, {
-        .layout = {
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
-            .padding = CLAY_PADDING_ALL(0)
-        }
-    }){};
-}
-
-Clay_RenderCommandArray CreateClayLayout(){
-
-    Clay_BeginLayout();
-
-    CLAY(CLAY_ID("MainContainer"), {
-        .layout = {
-            .layoutDirection = CLAY_LEFT_TO_RIGHT,
-            .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
-            .padding = CLAY_PADDING_ALL(5),
-            .childGap = 5
-        }
-    }){
-        for (int k=0;k<containerCount;k++){
-            CLAY(containers[k]->clay_id, containers[k]->layoutConfig){
-                for (int i=0;i<containers[k]->windowCount;i++){
-                    ClayWindow(containers[k]->windows[i]->clay_id);
-                }
-            }
-        }
-
-    };
-
-    return Clay_EndLayout(1.0f);
-}
-
-static void WM_RenderClay(){
-
-    for (int k=0;k<containerCount;k++){
-        struct container *container = containers[k];
-        for(int i=0;i<container->windowCount;i++){
-            struct window *window = container->windows[i];
-            if (window->toplevel != NULL){
-                struct wm_toplevel *toplevel = window->toplevel;
-                Clay_ElementData element = Clay_GetElementData(window->clay_id);
-                window->sizex = element.boundingBox.width;
-                window->sizey = element.boundingBox.height;
-                window->posx = element.boundingBox.x;
-                window->posy = element.boundingBox.y;
-                //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
-                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
-                wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
-            }else{
-                printf("toplevel NULL, not drawing\n");
-            }
-        }
-    }
-
-}
-
-void removeContainerFromArray(int index){
-    if(index<0 || index>=containerCount){
-        fprintf(stderr, "Error: Invalid container index %d\n", index);
-        return;
-    }
-
-    for (int i = index; i < containerCount - 1; i++) {
-        containers[i] = containers[i + 1];
-    }
-
-    containerCount--;
-}
-
-void removeWindowFromArray(int index, int parentIndex) {
-    printf("removing a window %i, from container %i\n", index, parentIndex);
-    struct container *container = containers[parentIndex];
-    if (index < 0 || index >= container->windowCount) {
-        fprintf(stderr, "Error: Invalid window index %d\n", index);
-        return;
-    }
-
-    for (int i = index; i < container->windowCount - 1; i++) {
-        container->windows[i] = container->windows[i + 1];
-    }
-
-    container->windowCount--;
-
-    container->windows[container->windowCount]->toplevel = NULL;
-    if (container->windowCount == 0){
-        removeContainerFromArray(parentIndex);
-    }
-}
-
-void CreateContainer(Clay_ElementDeclaration config){
-    printf("creating a container\n");
-    containers[containerCount] = malloc(sizeof(struct container));
-    printf("container allocated\n");
-    containers[containerCount]->layoutConfig = config;
-    containers[containerCount]->clay_id = CLAY_IDI("Container%i", containerCount);
-    printf("clay data created\n");
-    containers[containerCount]->windowCount = 0;
-    containers[containerCount]->windows = malloc(sizeof(struct window*)*40);
-    printf("windwow list allocated\n");
-    selectedContainerIndex = containerCount;
-    containerCount++;
-    printf("new container created\n");
-}
-
-void focus_next_container(int currentFocus){
-    if(currentFocus >= containerCount-1){
-        selectedContainerIndex = 0;
-    }else{
-        selectedContainerIndex = currentFocus+1;
-    }
-}
-
-static void focus_toplevel(struct wm_toplevel *toplevel) {
+static void focus_toplevel(wm_toplevel *toplevel) {
 	/* Note: this function only deals with keyboard focus. */
 	if (toplevel == NULL) {
 		return;
 	}
-	struct wm_server *server = toplevel->server;
+	wm_server *server = toplevel->server;
 	struct wlr_seat *seat = server->seat;
 	struct wlr_surface *prev_surface = seat->keyboard_state.focused_surface;
 	struct wlr_surface *surface = toplevel->xdg_toplevel->base->surface;
@@ -299,7 +79,7 @@ static void keyboard_handle_modifiers(
 		struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
-	struct wm_keyboard *keyboard =
+	wm_keyboard *keyboard =
 		wl_container_of(listener, keyboard, modifiers);
 	/*
 	 * A seat can only have one keyboard, but this is a limitation of the
@@ -313,7 +93,7 @@ static void keyboard_handle_modifiers(
 		&keyboard->wlr_keyboard->modifiers);
 }
 
-static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
+static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
     /*
         * Here we handle compositor keybindings. This is when the compositor is
         * processing keys, rather than passing them on to the client for its own
@@ -330,7 +110,7 @@ static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
         if (wl_list_length(&server->toplevels) < 2) {
             break;
         }
-        struct wm_toplevel *next_toplevel =
+        wm_toplevel *next_toplevel =
             wl_container_of(server->toplevels.prev, next_toplevel, link);
         focus_toplevel(next_toplevel);
         break;
@@ -357,8 +137,8 @@ static bool handle_keybinding(struct wm_server *server, xkb_keysym_t sym) {
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
     /* This event is raised when a key is pressed or released. */
-    struct wm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
-    struct wm_server *server = keyboard->server;
+    wm_keyboard *keyboard = wl_container_of(listener, keyboard, key);
+    wm_server *server = keyboard->server;
     struct wlr_keyboard_key_event *event = data;
     struct wlr_seat *seat = server->seat;
 
@@ -393,7 +173,7 @@ static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
     * the destruction of the wlr_keyboard. It will no longer receive events
     * and should be destroyed.
     */
-    struct wm_keyboard *keyboard =
+    wm_keyboard *keyboard =
         wl_container_of(listener, keyboard, destroy);
     wl_list_remove(&keyboard->modifiers.link);
     wl_list_remove(&keyboard->key.link);
@@ -402,10 +182,10 @@ static void keyboard_handle_destroy(struct wl_listener *listener, void *data) {
     free(keyboard);
 }
 
-static void server_new_keyboard(struct wm_server *server, struct wlr_input_device *device) {
+static void server_new_keyboard(wm_server *server, struct wlr_input_device *device) {
     struct wlr_keyboard *wlr_keyboard = wlr_keyboard_from_input_device(device);
 
-    struct wm_keyboard *keyboard = calloc(1, sizeof(*keyboard));
+    wm_keyboard *keyboard = calloc(1, sizeof(*keyboard));
     keyboard->server = server;
     keyboard->wlr_keyboard = wlr_keyboard;
 
@@ -437,7 +217,7 @@ static void server_new_keyboard(struct wm_server *server, struct wlr_input_devic
 static void server_new_input(struct wl_listener *listener, void *data) {
     /* This event is raised by the backend when a new input device becomes
     * available. */
-    struct wm_server *server =
+    wm_server *server =
         wl_container_of(listener, server, new_input);
     struct wlr_input_device *device = data;
     switch (device->type) {
@@ -458,7 +238,7 @@ static void server_new_input(struct wl_listener *listener, void *data) {
 }
 
 static void seat_pointer_focus_change(struct wl_listener *listener, void *data) {
-	struct wm_server *server = wl_container_of(
+	wm_server *server = wl_container_of(
 			listener, server, pointer_focus_change);
 	/* This event is raised when the pointer focus is changed, including when the
 	 * client is closed. We set the cursor image to its default if target surface
@@ -471,7 +251,7 @@ static void seat_request_set_selection(struct wl_listener *listener, void *data)
 	 * usually when the user copies something. wlroots allows compositors to
 	 * ignore such requests if they so choose, but in tinywl we always honor
 	 */
-	struct wm_server *server = wl_container_of(
+	wm_server *server = wl_container_of(
 			listener, server, request_set_selection);
 	struct wlr_seat_request_set_selection_event *event = data;
 	wlr_seat_set_selection(server->seat, event->source, event->serial);
@@ -482,7 +262,7 @@ static void output_request_state(struct wl_listener *listener, void *data) {
 	/* This function is called when the backend requests a new state for
 	 * the output. For example, Wayland and X11 backends request a new mode
 	 * when the output window is resized. */
-	struct wm_output *output = wl_container_of(listener, output, request_state);
+	wm_output *output = wl_container_of(listener, output, request_state);
 	const struct wlr_output_event_request_state *event = data;
 	wlr_output_commit_state(output->wlr_output, event->state);
 }
@@ -490,7 +270,7 @@ static void output_request_state(struct wl_listener *listener, void *data) {
 static void output_frame(struct wl_listener *listener, void *data) {
     /* This function is called every time an output is ready to display a frame,
     * generally at the output's refresh rate (e.g. 60Hz). */
-    struct wm_output *output = wl_container_of(listener, output, frame);
+    wm_output *output = wl_container_of(listener, output, frame);
     struct wlr_output *wlr_output = data;
     struct wlr_scene *scene = output->server->scene;
 
@@ -513,7 +293,7 @@ static void output_frame(struct wl_listener *listener, void *data) {
 }
 
 static void output_destroy(struct wl_listener *listener, void *data) {
-	struct wm_output *output = wl_container_of(listener, output, destroy);
+	wm_output *output = wl_container_of(listener, output, destroy);
 
 	wl_list_remove(&output->frame.link);
 	wl_list_remove(&output->request_state.link);
@@ -525,7 +305,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 static void server_new_output(struct wl_listener *listener, void *data) {
 	/* This event is raised by the backend when a new output (aka a display or
 	 * monitor) becomes available. */
-	struct wm_server *server =
+	wm_server *server =
 		wl_container_of(listener, server, new_output);
 	struct wlr_output *wlr_output = data;
 
@@ -553,7 +333,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 
 	/* Allocates and configures our state for this output */
-	struct wm_output *output = calloc(1, sizeof(*output));
+	wm_output *output = calloc(1, sizeof(*output));
 	output->wlr_output = wlr_output;
 	output->server = server;
 
@@ -571,7 +351,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 
 	wl_list_insert(&server->outputs, &output->link);
 
-    struct wm_output *output2 = wl_container_of(server->outputs.next, output, link);
+    wm_output *output2 = wl_container_of(server->outputs.next, output, link);
     uint32_t width, height;
     wlr_output_effective_resolution(output2->wlr_output, &width, &height);
     printf("output size %dx%d\n", width, height);
@@ -594,7 +374,7 @@ static void server_new_output(struct wl_listener *listener, void *data) {
 
 static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
-	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, map);
+	wm_toplevel *toplevel = wl_container_of(listener, toplevel, map);
 
 	wl_list_insert(&toplevel->server->toplevels, &toplevel->link);
 
@@ -605,7 +385,7 @@ static void xdg_toplevel_map(struct wl_listener *listener, void *data) {
 
 static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 	/* Called when the surface is unmapped, and should no longer be shown. */
-	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, unmap);
+	wm_toplevel *toplevel = wl_container_of(listener, toplevel, unmap);
 
     Clay_ElementId id = CLAY_IDI("Window%i", (intptr_t)toplevel);
 
@@ -630,7 +410,7 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
 
 static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 	/* Called when a new surface state is committed. */
-	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, commit);
+	wm_toplevel *toplevel = wl_container_of(listener, toplevel, commit);
 
 	if (toplevel->xdg_toplevel->base->initial_commit) {
 		/* When an xdg_surface performs an initial commit, the compositor must
@@ -646,7 +426,7 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_toplevel is destroyed. */
-	struct wm_toplevel *toplevel = wl_container_of(listener, toplevel, destroy);
+	wm_toplevel *toplevel = wl_container_of(listener, toplevel, destroy);
 
     printf("freeing toplevel links\n");
 	wl_list_remove(&toplevel->map.link);
@@ -662,11 +442,11 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 
 static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	/* This event is raised when a client creates a new toplevel (application window). */
-	struct wm_server *server = wl_container_of(listener, server, new_xdg_toplevel);
+	wm_server *server = wl_container_of(listener, server, new_xdg_toplevel);
 	struct wlr_xdg_toplevel *xdg_toplevel = data;
 
 	/* Allocate a tinywl_toplevel for this surface */
-	struct wm_toplevel *toplevel = calloc(1, sizeof(*toplevel));
+	wm_toplevel *toplevel = calloc(1, sizeof(*toplevel));
 	toplevel->server = server;
 	toplevel->xdg_toplevel = xdg_toplevel;
 	toplevel->scene_tree = wlr_scene_xdg_surface_create(&toplevel->server->scene->tree, xdg_toplevel->base);
@@ -685,8 +465,8 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	toplevel->destroy.notify = xdg_toplevel_destroy;
 	wl_signal_add(&xdg_toplevel->events.destroy, &toplevel->destroy);
 
-    struct container *container = containers[selectedContainerIndex];
-    container->windows[container->windowCount] = malloc(sizeof(struct window));
+    container *container = containers[selectedContainerIndex];
+    container->windows[container->windowCount] = malloc(sizeof(window));
     container->windows[container->windowCount]->toplevel = toplevel;
     container->windows[container->windowCount]->clay_id = CLAY_IDI("Window%i", (intptr_t)toplevel);
     container->windowCount += 1;
@@ -694,7 +474,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
 static void xdg_popup_commit(struct wl_listener *listener, void *data) {
 	/* Called when a new surface state is committed. */
-	struct wm_popup *popup = wl_container_of(listener, popup, commit);
+	wm_popup *popup = wl_container_of(listener, popup, commit);
 
 	if (popup->xdg_popup->base->initial_commit) {
 		/* When an xdg_surface performs an initial commit, the compositor must
@@ -708,7 +488,7 @@ static void xdg_popup_commit(struct wl_listener *listener, void *data) {
 
 static void xdg_popup_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_popup is destroyed. */
-	struct wm_popup *popup = wl_container_of(listener, popup, destroy);
+	wm_popup *popup = wl_container_of(listener, popup, destroy);
 
 	wl_list_remove(&popup->commit.link);
 	wl_list_remove(&popup->destroy.link);
@@ -719,7 +499,7 @@ static void server_new_xdg_popup(struct wl_listener *listener, void *data) {
 	/* This event is raised when a client creates a new popup. */
 	struct wlr_xdg_popup *xdg_popup = data;
 
-	struct wm_popup *popup = calloc(1, sizeof(*popup));
+	wm_popup *popup = calloc(1, sizeof(*popup));
 	popup->xdg_popup = xdg_popup;
 
 	/* We must add xdg popups to the scene graph so they get rendered. The
@@ -763,7 +543,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    struct wm_server server = {0};
+    wm_server server = {0};
 
     printf("setup wlroots\n");
 
@@ -828,7 +608,11 @@ int main(int argc, char *argv[])
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
 
     printf("reserving memory for containers\n");
-    containers = malloc(sizeof(struct container*) * 20);
+
+    containerCount = 0;
+    selectedContainerIndex = 0;
+
+    containers = malloc(sizeof(container*) * 20);
     if (!containers) {
         fprintf(stderr, "Failed to allocate windows array\n");
         return 1;

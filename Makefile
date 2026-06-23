@@ -5,12 +5,12 @@ CFLAGS_PKG_CONFIG!=$(PKG_CONFIG) --cflags $(PKGS)
 CFLAGS+=$(CFLAGS_PKG_CONFIG)
 LIBS!=$(PKG_CONFIG) --libs $(PKGS)
 
-all: test
+INCL= -I./include/
 
-main.o: src/main.c
-	$(CC) -c $< -g -Werror $(CFLAGS) -I. -DWLR_USE_UNSTABLE -o build/$@
-test: main.o
-	$(CC) build/$^ -g -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) -o build/$@
+SRCS = src/main.c src/layout.c
+
+all:
+	gcc $(SRCS) -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) $(INCL) -I. -DWLR_USE_UNSTABLE -o build/$@
 
 clean:
 	rm -f build/*

@@ -8,3 +8,10 @@ sain clayn pohjan luotua, mutta veilä ei ikkunoita sillä
 siirrellä
 
 edit. tiling toimii clayn kanssa
+
+# Day idk, 20.6.26
+
+ikkunointi toimii clayn kanssa, luomalla kontterja missä valinnainen tiling suunta
+ikkunoita voi sulkea ja kontit poistuvat automaattisesti layoutista
+
+
