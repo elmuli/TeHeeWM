@@ -15,26 +15,39 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 
-#include <main.h>
+#include "main.h"
 #define CLAY_IMPLEMENTATION
 #include "lib/clay.h"
 
+Clay_ElementDeclaration containerLayoutConfigVertical(){
+    printf("padding %d\n", wm_config->windowPadding);
+    return (Clay_ElementDeclaration){
+        .layout = {
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
+            .padding = {wm_config->windowPadding,
+                wm_config->windowPadding,
+                wm_config->windowPadding,
+                wm_config->windowPadding
+            }
+        },
+    };
+}
 
-Clay_ElementDeclaration containerLayoutConfigVertical = (Clay_ElementDeclaration){
-    .layout = {
-        .layoutDirection = CLAY_LEFT_TO_RIGHT,
-        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
-        .padding = {5,5,5,5}
-    },
-};
-
-Clay_ElementDeclaration containerLayoutConfigHorizontal = (Clay_ElementDeclaration){
-    .layout = {
-        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
-        .padding = {5,5,5,5}
-    },
-};
+Clay_ElementDeclaration containerLayoutConfigHorizontal(){
+    printf("padding %d\n", wm_config->windowPadding);
+    return (Clay_ElementDeclaration){
+        .layout = {
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) },
+            .padding = {wm_config->windowPadding,
+                wm_config->windowPadding,
+                wm_config->windowPadding,
+                wm_config->windowPadding
+            }
+        },
+    };
+}
 
 void ClayWindow(Clay_ElementId id){
     CLAY(id, {

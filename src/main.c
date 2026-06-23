@@ -24,13 +24,15 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include <main.h>
+#include "main.h"
 
 int containerCount = 0;
 struct container **containers;
 int selectedContainerIndex = 0;
 
 const char *socket;
+
+config *wm_config;
 
 static void focus_toplevel(wm_toplevel *toplevel) {
 	/* Note: this function only deals with keyboard focus. */
@@ -124,10 +126,10 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         focus_next_container(selectedContainerIndex);
         break;
     case XKB_KEY_F4:
-        CreateContainer(containerLayoutConfigHorizontal);
+        CreateContainer(containerLayoutConfigHorizontal());
         break;
     case XKB_KEY_F5:
-        CreateContainer(containerLayoutConfigVertical);
+        CreateContainer(containerLayoutConfigVertical());
         break;
     default:
         return false;
@@ -420,7 +422,6 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
         wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
 	}
 
-
     CreateClayLayout();
 }
 
@@ -607,6 +608,8 @@ int main(int argc, char *argv[])
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
 
+    wm_config = ReadConfigFile("config.conf");
+
     printf("reserving memory for containers\n");
 
     containerCount = 0;
@@ -617,9 +620,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to allocate windows array\n");
         return 1;
     }
-    CreateContainer(containerLayoutConfigVertical);
+    CreateContainer(containerLayoutConfigVertical());
     printf("containers created and memory reserve");
-
 
     printf("Setting up CLAY\n");
     uint64_t totalMemorySize = Clay_MinMemorySize();
@@ -630,6 +632,10 @@ int main(int argc, char *argv[])
 
     Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920,  1080 }, (Clay_ErrorHandler) { 0 });
 
+
+    if(wm_config == NULL){
+        return 1;
+    }
 
 	socket = wl_display_add_socket_auto(server.wl_display);
 	if (!socket) {

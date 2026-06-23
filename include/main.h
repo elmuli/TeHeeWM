@@ -26,7 +26,6 @@
 
 #include "lib/clay.h"
 
-
 typedef struct wm_server wm_server;
 typedef struct wm_output wm_output;
 typedef struct wm_toplevel wm_toplevel;
@@ -105,6 +104,17 @@ struct wm_keyboard {
 	struct wl_listener destroy;
 };
 
+typedef struct config{
+    int windowGap;
+    int windowPadding;
+    int containerGap;
+    int containerPadding;
+} config;
+extern config *wm_config;
+
+config *ReadConfigFile(const char*);
+
+
 #define MAX_WINDOW_COUNT
 
 typedef struct window{
@@ -122,8 +132,8 @@ typedef struct container{
     struct window **windows;
 } container;
 
-extern Clay_ElementDeclaration containerLayoutConfigVertical;
-extern Clay_ElementDeclaration containerLayoutConfigHorizontal;
+Clay_ElementDeclaration containerLayoutConfigVertical();
+Clay_ElementDeclaration containerLayoutConfigHorizontal();
 extern struct container **containers;
 
 extern int containerCount;
