@@ -29,7 +29,8 @@ Clay_ElementDeclaration containerLayoutConfigVertical(){
                 wm_config->windowPadding,
                 wm_config->windowPadding,
                 wm_config->windowPadding
-            }
+            },
+            .childGap = wm_config->windowGap
         },
     };
 }
@@ -44,7 +45,8 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
                 wm_config->windowPadding,
                 wm_config->windowPadding,
                 wm_config->windowPadding
-            }
+            },
+            .childGap = wm_config->windowGap
         },
     };
 }
@@ -54,7 +56,8 @@ void ClayWindow(Clay_ElementId id){
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
-            .padding = CLAY_PADDING_ALL(0)
+            .padding = CLAY_PADDING_ALL(wm_config->containerPadding),
+            .childGap = wm_config->containerGap
         }
     }){};
 }
