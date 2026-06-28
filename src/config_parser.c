@@ -23,6 +23,7 @@ config* ReadConfigFile(const char* path){
 
         while(readFile){
             if(!inSection){
+                printf("looking for sections\n");
                 char section[50];
                 bool foundSection = false;
                 while(fscanf(config_file, "%s %*s", section) == 1){
@@ -63,6 +64,9 @@ config* ReadConfigFile(const char* path){
                         printf("variable: %s , value: %i\n", variable, value);
                         if(strcmp(variable, "gap") == 0) Configuration->containerGap = value;
                         if(strcmp(variable, "padding") == 0) Configuration->containerPadding = value;
+                        if(strcmp(variable, "}") == 0){
+                            break;
+                        }
                     }
                     printf("section end\n");
                     inSection = false;
@@ -73,6 +77,8 @@ config* ReadConfigFile(const char* path){
             }
         }
     }
+
+    fclose(config_file);
 
     return Configuration;
 }
