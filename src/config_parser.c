@@ -25,11 +25,10 @@ config* ReadConfigFile(const char* path){
             if(!inSection){
                 printf("looking for sections\n");
                 char section[50];
-                char section_s[25];
+                char section_s[10];
                 bool foundSection = false;
-                while(fscanf(config_file, "%s %s", section, section_s) == 1){
-                    printf("%s\n", section);
-                    printf("%s\n", section_s);
+                while(fscanf(config_file, "%s %s", section, section_s) == 2){
+                    printf("section: %s\n", section);
                     if(strcmp(section, "window") == 0 && strcmp(section_s, "{") == 0){
                         inSection = true;
                         sectionId = 1;
@@ -42,6 +41,8 @@ config* ReadConfigFile(const char* path){
                         printf("found section\n");
                         foundSection = true;
                         break;
+                    }else if(strcmp(section, "#")){
+                        continue;
                     }
                 }
                 if(!foundSection){
