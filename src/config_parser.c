@@ -12,74 +12,69 @@ config* ReadConfigFile(const char* path){
 
     FILE* config_file = fopen(path, "r");
 
-    char data[50];
     if(config_file == NULL){
         printf("[ERROR]: could not open file: %s\n", path);
         return NULL;
     }else{
-        bool readFile = true;
+        int sectionId = 0;
         bool inSection = false;
-        int sectionId = -1;
 
-        while(readFile){
+        char line[100];
+        char *section = NULL;
+        while(fgets(line, sizeof(line), config_file)){
+            printf("line %s\n", line);
+            if(strstr(line, "#")) continue;
             if(!inSection){
                 printf("looking for sections\n");
-                char section[50];
-                char section_s[10];
-                bool foundSection = false;
-                while(fscanf(config_file, "%s %s", section, section_s) == 2){
-                    printf("section: %s\n", section);
-                    if(strcmp(section, "window") == 0 && strcmp(section_s, "{") == 0){
-                        inSection = true;
+                if((section = strtok(line, "{"))){
+                    printf("section %s\n", section);
+                    if(strstr(section, "window")){
+                        printf("section found, %s\n", section);
                         sectionId = 1;
-                        printf("found section\n");
-                        foundSection = true;
-                        break;
-                    }else if(strcmp(section, "container") == 0 && strcmp(section_s, "{") == 0){
                         inSection = true;
+                    }else if(strstr(section, "container")){
+                        printf("section found, %s\n", section);
                         sectionId = 2;
-                        printf("found section\n");
-                        foundSection = true;
-                        break;
-                    }else if(strcmp(section, "#")){
-                        continue;
+                        inSection = true;
+                    }else if(strstr(section, "binds")){
+                        printf("section found, %s\n", section);
+                        sectionId = 3;
+                        inSection = true;
                     }
-                }
-                if(!foundSection){
-                    readFile = false;
                 }
             }else{
-                if (sectionId == 1) {
-                    char variable[50];
-                    int value;
-                    while(fscanf(config_file, "%s %*s %i", variable, &value) == 2){
-                        if(strcmp(variable, "#") == 0) continue;
-                        printf("variable: %s , value: %i\n", variable, value);
-                        if(strcmp(variable, "gap") == 0) Configuration->windowGap = value;
-                        if(strcmp(variable, "padding") == 0) Configuration->windowPadding = value;
-                        if(strcmp(variable, "}") == 0){
-                            break;
+                char *data = NULL;
+                int value = 0;
+                if(strstr(line, "}")){
+                    inSection = false;
+                    sectionId = 0;
+                    continue;
+                }
+                if((data = strtok(line, "="))){
+                    printf("data: %s\n", data);
+                    char *data_value = strtok(NULL, "=");
+
+                    if(sectionId == 3){
+
+                    }else
+                        if(data_value != NULL) value = atoi(data_value);
+                        printf("value: %i\n", value);
+
+                        if(strstr(data, "gap")){
+                            if(sectionId == 1){
+                                Configuration->windowGap = value;
+                            }else if(sectionId == 2){
+                                Configuration->containerGap = value;
+                            }
+                        }else if(strstr(data, "padding")){
+                            if(sectionId == 1){
+                                Configuration->windowPadding = value;
+                            }else if(sectionId == 2){
+                                Configuration->containerPadding = value;
+                            }
                         }
                     }
-                    printf("section end\n");
-                    inSection = false;
-                    sectionId = -1;
-                }else if(sectionId == 2){
-                    char variable[50];
-                    int value;
-                    while(fscanf(config_file, "%s %*s %i", variable, &value) == 2){
-                        printf("variable: %s , value: %i\n", variable, value);
-                        if(strcmp(variable, "gap") == 0) Configuration->containerGap = value;
-                        if(strcmp(variable, "padding") == 0) Configuration->containerPadding = value;
-                        if(strcmp(variable, "}") == 0){
-                            break;
-                        }
-                    }
-                    printf("section end\n");
-                    inSection = false;
-                    sectionId = -1;
-                }else{
-                    break;
+
                 }
             }
         }
