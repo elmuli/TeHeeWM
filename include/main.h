@@ -104,12 +104,19 @@ struct wm_keyboard {
 	struct wl_listener destroy;
 };
 
+typedef struct keybind{
+
+} keybind;
+
 typedef struct config{
     int windowGap;
     int windowPadding;
     int containerGap;
     int containerPadding;
+    keybind **binds;
+    size_t keybind_cout;
 } config;
+
 extern config *wm_config;
 
 config *ReadConfigFile(const char*);

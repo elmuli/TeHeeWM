@@ -55,7 +55,9 @@ config* ReadConfigFile(const char* path){
                     char *data_value = strtok(NULL, "=");
 
                     if(sectionId == 3){
+                        if(strstr(data_value, "mod")){
 
+                        }
                     }else
                         if(data_value != NULL) value = atoi(data_value);
                         printf("value: %i\n", value);
