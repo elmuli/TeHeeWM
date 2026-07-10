@@ -95,6 +95,11 @@ static void keyboard_handle_modifiers(
 		&keyboard->wlr_keyboard->modifiers);
 }
 
+
+void exit_wm(void *self, wm_server *server){
+    wl_display_terminate(server->wl_display);
+}
+
 static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
     /*
         * Here we handle compositor keybindings. This is when the compositor is
@@ -103,9 +108,16 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         *
         * This function assumes Alt is held down.
         */
+    for (int i=0;i<wm_config->keybind_count;i++){
+        keybind *bind = wm_config->binds[i];
+        if(sym == bind->key_sym){
+            bind->action(bind, server);
+        }
+    }
+
     switch (sym) {
     case XKB_KEY_Escape:
-        wl_display_terminate(server->wl_display);
+        //wl_display_terminate(server->wl_display);
         break;
     case XKB_KEY_F1:
         /* Cycle to the next toplevel */

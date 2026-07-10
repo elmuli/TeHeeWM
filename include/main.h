@@ -105,7 +105,8 @@ struct wm_keyboard {
 };
 
 typedef struct keybind{
-
+    xkb_keysym_t key_sym;
+    void (*action)(void *self, wm_server *action);
 } keybind;
 
 typedef struct config{
@@ -114,15 +115,16 @@ typedef struct config{
     int containerGap;
     int containerPadding;
     keybind **binds;
-    size_t keybind_cout;
+    size_t keybind_count;
 } config;
 
 extern config *wm_config;
 
 config *ReadConfigFile(const char*);
 
+void exit_wm(void *self, wm_server *server);
 
-#define MAX_WINDOW_COUNT
+#define MAX_WINDOW_COUNT 
 
 typedef struct window{
     Clay_ElementId clay_id;

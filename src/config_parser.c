@@ -4,11 +4,41 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <xkbcommon/xkbcommon.h>
 
 #include "main.h"
 
+void CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
+    printf("checking for actions\n");
+    if(strstr(action, "exit")){
+        config->binds[config->keybind_count] = malloc(sizeof(keybind));
+        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->action = exit_wm;
+        config->keybind_count++;
+        printf("keybind created for exit\n");
+    }
+}
+
+typedef struct key{
+    char* name;
+    xkb_keysym_t key_sym;
+} Keys;
+
+Keys *CreateKeyList(Keys *list){
+    list = {
+        {"esc", XKB_KEY_Escape},
+    };
+    return list;
+}
+
+void CheckKeys(config *config, char* key, char* action){
+
+}
+
 config* ReadConfigFile(const char* path){
-    config *Configuration = malloc(sizeof(config));;
+    config *Configuration = malloc(sizeof(config));
+    Configuration->keybind_count = 0;
+    Configuration->binds = malloc(sizeof(keybind*) * 100);
 
     FILE* config_file = fopen(path, "r");
 
@@ -53,12 +83,26 @@ config* ReadConfigFile(const char* path){
                 if((data = strtok(line, "="))){
                     printf("data: %s\n", data);
                     char *data_value = strtok(NULL, "=");
+                    printf("data_value: %s\n", data_value);
 
                     if(sectionId == 3){
-                        if(strstr(data_value, "mod")){
 
+                        Keys *supportedKeys[];
+                        CreateKeyList(supportedKeys);
+
+                        char *m_key = NULL;
+                        if((m_key = strtok(data, "+"))){
+                            printf("m_key: %s\n", m_key);
+                            char *key = strtok(NULL, "+");
+                            printf("key: %s\n", key);
+                            if(strstr(m_key, "mod")){
+                                printf("has mod key\n");
+                                if(strstr(key, "esc")){
+                                    CheckBindAction(Configuration, data_value, XKB_KEY_Escape);
+                                }
+                            }
                         }
-                    }else
+                    }else{
                         if(data_value != NULL) value = atoi(data_value);
                         printf("value: %i\n", value);
 
@@ -83,6 +127,5 @@ config* ReadConfigFile(const char* path){
     }
 
     fclose(config_file);
-
     return Configuration;
 }
