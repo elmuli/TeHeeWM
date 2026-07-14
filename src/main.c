@@ -100,6 +100,14 @@ void exit_wm(void *self, wm_server *server){
     wl_display_terminate(server->wl_display);
 }
 
+void exec_cmd(void *self, wm_server *server){
+    keybind *bind = (keybind*)self;
+    setenv("WAYLAND_DISPLAY", socket, true);
+    if (fork() == 0) {
+        execl("/bin/sh", "/bin/sh", "-c", bind->cmd, (void *)NULL);
+    }
+}
+
 static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
     /*
         * Here we handle compositor keybindings. This is when the compositor is
@@ -108,9 +116,13 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         *
         * This function assumes Alt is held down.
         */
+    
+    printf("bind count: %i\n", wm_config->keybind_count);
     for (int i=0;i<wm_config->keybind_count;i++){
         keybind *bind = wm_config->binds[i];
+        printf("key_sym: %d , sym: %d\n", bind->key_sym, sym);
         if(sym == bind->key_sym){
+            if(bind->cmd != NULL) printf("bind cmd: %s\n", bind->cmd);
             bind->action(bind, server);
         }
     }
@@ -129,10 +141,11 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         focus_toplevel(next_toplevel);
         break;
     case XKB_KEY_F2:
+        /*
         setenv("WAYLAND_DISPLAY", socket, true);
         if (fork() == 0) {
             execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
-        }
+        }*/
         break;
     case XKB_KEY_F3:
         focus_next_container(selectedContainerIndex);

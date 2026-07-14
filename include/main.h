@@ -26,6 +26,9 @@
 
 #include "lib/clay.h"
 
+#ifndef MAIN_H
+#define MAIN_H
+
 typedef struct wm_server wm_server;
 typedef struct wm_output wm_output;
 typedef struct wm_toplevel wm_toplevel;
@@ -106,6 +109,7 @@ struct wm_keyboard {
 
 typedef struct keybind{
     xkb_keysym_t key_sym;
+    char *cmd;
     void (*action)(void *self, wm_server *action);
 } keybind;
 
@@ -123,6 +127,7 @@ extern config *wm_config;
 config *ReadConfigFile(const char*);
 
 void exit_wm(void *self, wm_server *server);
+void exec_cmd(void *self, wm_server *server);
 
 #define MAX_WINDOW_COUNT 
 
@@ -156,4 +161,6 @@ void CreateContainer(Clay_ElementDeclaration);
 void focus_next_container(int);
 void removeWindowFromArray(int, int);
 void removeContainerFromArray(int);
+
+#endif // !MAIN_H
 
