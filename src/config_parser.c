@@ -17,32 +17,32 @@ typedef struct key{
 
 void CreateKeyList(Key list[]){
     printf("creating key list\n");
-    list[0] = (Key){" A ", XKB_KEY_A};
-    list[1] = (Key){" B ", XKB_KEY_B};
-    list[2] = (Key){" C ", XKB_KEY_C};
-    list[3] = (Key){" D ", XKB_KEY_D};
-    list[4] = (Key){" E ", XKB_KEY_E};
-    list[5] = (Key){" F ", XKB_KEY_F};
-    list[6] = (Key){" G ", XKB_KEY_G};
-    list[7] = (Key){" H ", XKB_KEY_H};
-    list[8] = (Key){" I ", XKB_KEY_I};
-    list[9] = (Key){" J ", XKB_KEY_J};
-    list[10] = (Key){" K ", XKB_KEY_K};
-    list[11] = (Key){" L ", XKB_KEY_L};
-    list[12] = (Key){" M ", XKB_KEY_M};
-    list[13] = (Key){" N ", XKB_KEY_N};
-    list[14] = (Key){" O ", XKB_KEY_O};
-    list[15] = (Key){" P ", XKB_KEY_P};
-    list[16] = (Key){" Q ", XKB_KEY_Q};
-    list[17] = (Key){" R ", XKB_KEY_R};
-    list[18] = (Key){" S ", XKB_KEY_S};
-    list[19] = (Key){" T ", XKB_KEY_T};
-    list[20] = (Key){" U ", XKB_KEY_U};
-    list[21] = (Key){" V ", XKB_KEY_V};
-    list[22] = (Key){" W ", XKB_KEY_W};
-    list[23] = (Key){" X ", XKB_KEY_X};
-    list[24] = (Key){" Y ", XKB_KEY_Y};
-    list[25] = (Key){" Z ", XKB_KEY_Z};
+    list[0] = (Key){" A ", XKB_KEY_a};
+    list[1] = (Key){" B ", XKB_KEY_b};
+    list[2] = (Key){" C ", XKB_KEY_c};
+    list[3] = (Key){" D ", XKB_KEY_d};
+    list[4] = (Key){" E ", XKB_KEY_d};
+    list[5] = (Key){" F ", XKB_KEY_f};
+    list[6] = (Key){" G ", XKB_KEY_g};
+    list[7] = (Key){" H ", XKB_KEY_h};
+    list[8] = (Key){" I ", XKB_KEY_i};
+    list[9] = (Key){" J ", XKB_KEY_j};
+    list[10] = (Key){" K ", XKB_KEY_k};
+    list[11] = (Key){" L ", XKB_KEY_l};
+    list[12] = (Key){" M ", XKB_KEY_m};
+    list[13] = (Key){" N ", XKB_KEY_n};
+    list[14] = (Key){" O ", XKB_KEY_o};
+    list[15] = (Key){" P ", XKB_KEY_p};
+    list[16] = (Key){" Q ", XKB_KEY_q};
+    list[17] = (Key){" R ", XKB_KEY_r};
+    list[18] = (Key){" S ", XKB_KEY_s};
+    list[19] = (Key){" T ", XKB_KEY_t};
+    list[20] = (Key){" U ", XKB_KEY_u};
+    list[21] = (Key){" V ", XKB_KEY_v};
+    list[22] = (Key){" W ", XKB_KEY_w};
+    list[23] = (Key){" X ", XKB_KEY_x};
+    list[24] = (Key){" Y ", XKB_KEY_y};
+    list[25] = (Key){" Z ", XKB_KEY_z};
     list[26] = (Key){" F1 ", XKB_KEY_F1};
     list[27] = (Key){" F2 ", XKB_KEY_F2};
     list[28] = (Key){" F3 ", XKB_KEY_F3};
@@ -87,13 +87,49 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
             if(program == NULL) return false;
             config->binds[config->keybind_count] = malloc(sizeof(keybind));
             config->binds[config->keybind_count]->key_sym = key_sym;
-            config->binds[config->keybind_count]->cmd = program;
+            config->binds[config->keybind_count]->cmd = (char *)malloc(strlen(program) + 1);
+            config->binds[config->keybind_count]->cmd_len = strlen(program) + 1;
+            strcpy(config->binds[config->keybind_count]->cmd, program);
             config->binds[config->keybind_count]->action = exec_cmd;
-            printf("keybind created for exec at: %i\n", config->keybind_count);
+            printf("keybind created for exec at: %i, for: %s\n", config->keybind_count, config->binds[config->keybind_count]->cmd);
             config->keybind_count++;
             return true;
         }
+    }else if(strstr(action, "cycle_toplevel")){
+        config->binds[config->keybind_count] = malloc(sizeof(keybind));
+        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->cmd = NULL;
+        config->binds[config->keybind_count]->action = cycle_toplevel;
+        printf("keybind created for cycle_toplevel at: %i\n", config->keybind_count);
+        config->keybind_count++;
+        return true;
+    }else if(strstr(action, "change_container")){
+        config->binds[config->keybind_count] = malloc(sizeof(keybind));
+        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->cmd = NULL;
+        config->binds[config->keybind_count]->action = change_container;
+        printf("keybind created for change_container at: %i\n", config->keybind_count);
+        config->keybind_count++;
+        return true;
+    }else if(strstr(action, "create_vertical_container")){
+        config->binds[config->keybind_count] = malloc(sizeof(keybind));
+        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->cmd = NULL;
+        config->binds[config->keybind_count]->action = create_vertical_container;
+        printf("keybind created for chreate_vertical_container at: %i\n", config->keybind_count);
+        config->keybind_count++;
+        return true;
+    }else if(strstr(action, "create_horizontal_container")){
+        config->binds[config->keybind_count] = malloc(sizeof(keybind));
+        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->cmd = NULL;
+        config->binds[config->keybind_count]->action = create_horizontal_container;
+        printf("keybind created for create_horizontal_container at: %i\n", config->keybind_count);
+        config->keybind_count++;
+        return true;
+
     }
+
     return false;
 }
 

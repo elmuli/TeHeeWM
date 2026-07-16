@@ -110,6 +110,7 @@ struct wm_keyboard {
 typedef struct keybind{
     xkb_keysym_t key_sym;
     char *cmd;
+    int cmd_len;
     void (*action)(void *self, wm_server *action);
 } keybind;
 
@@ -128,6 +129,10 @@ config *ReadConfigFile(const char*);
 
 void exit_wm(void *self, wm_server *server);
 void exec_cmd(void *self, wm_server *server);
+void cycle_toplevel(void *self, wm_server *server);
+void change_container(void *self, wm_server *server);
+void create_vertical_container(void *self, wm_server *server);
+void create_horizontal_container(void *self, wm_server *server);
 
 #define MAX_WINDOW_COUNT 
 

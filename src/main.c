@@ -103,9 +103,34 @@ void exit_wm(void *self, wm_server *server){
 void exec_cmd(void *self, wm_server *server){
     keybind *bind = (keybind*)self;
     setenv("WAYLAND_DISPLAY", socket, true);
+    char *cmd = (char *)malloc(bind->cmd_len);
+    strcpy(cmd, bind->cmd);
     if (fork() == 0) {
-        execl("/bin/sh", "/bin/sh", "-c", bind->cmd, (void *)NULL);
+        execl("/bin/sh", "/bin/sh", "-c", cmd, (void *)NULL);
     }
+}
+
+void cycle_toplevel(void *self, wm_server *server){
+    keybind *bind = (keybind*)self;
+
+    if (wl_list_length(&server->toplevels) < 2) {
+        return;
+    }
+    wm_toplevel *next_toplevel =
+        wl_container_of(server->toplevels.prev, next_toplevel, link);
+    focus_toplevel(next_toplevel);
+}
+
+void change_container(void *self, wm_server *server){
+    focus_next_container(selectedContainerIndex);
+}
+
+void create_vertical_container(void *self, wm_server *server){
+    CreateContainer(containerLayoutConfigVertical());
+}
+
+void create_horizontal_container(void *self, wm_server *server){
+    CreateContainer(containerLayoutConfigHorizontal());
 }
 
 static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
@@ -122,7 +147,9 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         keybind *bind = wm_config->binds[i];
         printf("key_sym: %d , sym: %d\n", bind->key_sym, sym);
         if(sym == bind->key_sym){
-            if(bind->cmd != NULL) printf("bind cmd: %s\n", bind->cmd);
+            char *cmd = (char *)malloc(bind->cmd_len);
+            strcpy(cmd, bind->cmd);
+            if(cmd != NULL) printf("bind cmd: %s\n", cmd);
             bind->action(bind, server);
         }
     }
@@ -132,13 +159,14 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         //wl_display_terminate(server->wl_display);
         break;
     case XKB_KEY_F1:
-        /* Cycle to the next toplevel */
+        /* Cycle to the next toplevel
         if (wl_list_length(&server->toplevels) < 2) {
             break;
         }
         wm_toplevel *next_toplevel =
             wl_container_of(server->toplevels.prev, next_toplevel, link);
         focus_toplevel(next_toplevel);
+         */
         break;
     case XKB_KEY_F2:
         /*
@@ -146,15 +174,6 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         if (fork() == 0) {
             execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
         }*/
-        break;
-    case XKB_KEY_F3:
-        focus_next_container(selectedContainerIndex);
-        break;
-    case XKB_KEY_F4:
-        CreateContainer(containerLayoutConfigHorizontal());
-        break;
-    case XKB_KEY_F5:
-        CreateContainer(containerLayoutConfigVertical());
         break;
     default:
         return false;
@@ -683,6 +702,12 @@ int main(int argc, char *argv[])
 
 	wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",socket);
 	wl_display_run(server.wl_display);
+
+    for (int i=0;i<wm_config->keybind_count;i++){
+        keybind *bind = wm_config->binds[i];
+        if(bind->cmd != NULL) free(bind->cmd);
+    }
+    printf("cleaned bind commands\n");
 
     wl_display_destroy_clients(server.wl_display);
 
