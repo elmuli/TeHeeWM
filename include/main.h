@@ -120,6 +120,7 @@ typedef struct config{
     int containerGap;
     int containerPadding;
     keybind **binds;
+    uint32_t mod_key;
     size_t keybind_count;
 } config;
 

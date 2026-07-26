@@ -8,7 +8,7 @@
 
 #include "main.h"
 
-#define KEY_COUNT 49
+#define KEY_COUNT 53
 
 typedef struct key{
     char* name;
@@ -65,15 +65,20 @@ void CreateKeyList(Key list[]){
     list[45] = (Key){" 7 ", XKB_KEY_7};
     list[46] = (Key){" 8 ", XKB_KEY_8};
     list[47] = (Key){" 9 ", XKB_KEY_9};
+    printf("mod list\n");
     list[48] = (Key){" ESC ", XKB_KEY_Escape};
+    list[49] = (Key){" ALT ", XKB_KEY_at};
+    list[50] = (Key){" SHIFT ", XKB_KEY_Shift_L};
+    list[51] = (Key){" CTRL ", XKB_KEY_cr};
+    list[52] = (Key){" SUPER ", XKB_KEY_Super_L};
     printf("keylist created\n");
 }
 
-bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
+bool CheckBindAction(config *config, char *action, Key key){
     printf("checking for actions\n");
     if(strstr(action, "exit")){
         config->binds[config->keybind_count] = malloc(sizeof(keybind));
-        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->key_sym = key.key_sym;
         config->binds[config->keybind_count]->cmd = NULL;
         config->binds[config->keybind_count]->action = exit_wm;
         printf("keybind created for exit at: %i\n", config->keybind_count);
@@ -86,7 +91,7 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
             program = strtok(program, ")");
             if(program == NULL) return false;
             config->binds[config->keybind_count] = malloc(sizeof(keybind));
-            config->binds[config->keybind_count]->key_sym = key_sym;
+            config->binds[config->keybind_count]->key_sym = key.key_sym;
             config->binds[config->keybind_count]->cmd = (char *)malloc(strlen(program) + 1);
             config->binds[config->keybind_count]->cmd_len = strlen(program) + 1;
             strcpy(config->binds[config->keybind_count]->cmd, program);
@@ -97,7 +102,7 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
         }
     }else if(strstr(action, "cycle_toplevel")){
         config->binds[config->keybind_count] = malloc(sizeof(keybind));
-        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->key_sym = key.key_sym;
         config->binds[config->keybind_count]->cmd = NULL;
         config->binds[config->keybind_count]->action = cycle_toplevel;
         printf("keybind created for cycle_toplevel at: %i\n", config->keybind_count);
@@ -105,7 +110,7 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
         return true;
     }else if(strstr(action, "change_container")){
         config->binds[config->keybind_count] = malloc(sizeof(keybind));
-        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->key_sym = key.key_sym;
         config->binds[config->keybind_count]->cmd = NULL;
         config->binds[config->keybind_count]->action = change_container;
         printf("keybind created for change_container at: %i\n", config->keybind_count);
@@ -113,7 +118,7 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
         return true;
     }else if(strstr(action, "create_vertical_container")){
         config->binds[config->keybind_count] = malloc(sizeof(keybind));
-        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->key_sym = key.key_sym;
         config->binds[config->keybind_count]->cmd = NULL;
         config->binds[config->keybind_count]->action = create_vertical_container;
         printf("keybind created for chreate_vertical_container at: %i\n", config->keybind_count);
@@ -121,13 +126,12 @@ bool CheckBindAction(config *config, char *action, xkb_keysym_t key_sym){
         return true;
     }else if(strstr(action, "create_horizontal_container")){
         config->binds[config->keybind_count] = malloc(sizeof(keybind));
-        config->binds[config->keybind_count]->key_sym = key_sym;
+        config->binds[config->keybind_count]->key_sym = key.key_sym;
         config->binds[config->keybind_count]->cmd = NULL;
         config->binds[config->keybind_count]->action = create_horizontal_container;
         printf("keybind created for create_horizontal_container at: %i\n", config->keybind_count);
         config->keybind_count++;
         return true;
-
     }
 
     return false;
@@ -191,7 +195,24 @@ config* ReadConfigFile(const char* path){
                         if(supportedKeys == NULL) return NULL;
 
                         char *m_key = NULL;
-                        if((m_key = strtok(data, "+"))){
+                        if(strstr(data_value, "mod")){
+                            printf("checking for modiefier keys\n");
+                            for (int i=0;i<KEY_COUNT;i++){
+                                if(!strcmp(data, supportedKeys[i].name)){
+                                    printf("mod key: %s\n", data);
+                                    if(strstr(data, "ALT")){
+                                        Configuration->mod_key = WLR_MODIFIER_ALT;
+                                    }else if(strstr(data, "SHIFT")){
+                                        Configuration->mod_key = WLR_MODIFIER_SHIFT;
+                                    }else if(strstr(data, "CTRL")){
+                                        Configuration->mod_key = WLR_MODIFIER_CTRL;
+                                    }else if(strstr(data, "SUPER")){
+                                        //Configuration->mod_key = WLR_MODIFIER_SUPER;
+                                    }
+                                    break;
+                                }
+                            }
+                        }else if((m_key = strtok(data, "+"))){
                             printf("m_key: %s\n", m_key);
                             char *key = strtok(NULL, "+");
                             printf("key: %s\n", key);
@@ -199,7 +220,7 @@ config* ReadConfigFile(const char* path){
                                 printf("has mod key\n");
                                 for (int i=0;i<KEY_COUNT;i++){
                                     if(!strcmp(key, supportedKeys[i].name)){
-                                        if(CheckBindAction(Configuration, data_value, supportedKeys[i].key_sym)) break;
+                                        if(CheckBindAction(Configuration, data_value, supportedKeys[i])) break;
                                     }
                                 }
                             }

@@ -142,6 +142,7 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         * This function assumes Alt is held down.
         */
     
+    bool found_key = false;
     printf("bind count: %i\n", wm_config->keybind_count);
     for (int i=0;i<wm_config->keybind_count;i++){
         keybind *bind = wm_config->binds[i];
@@ -151,34 +152,12 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
             strcpy(cmd, bind->cmd);
             if(cmd != NULL) printf("bind cmd: %s\n", cmd);
             bind->action(bind, server);
+            found_key = true;
+            break;
         }
     }
 
-    switch (sym) {
-    case XKB_KEY_Escape:
-        //wl_display_terminate(server->wl_display);
-        break;
-    case XKB_KEY_F1:
-        /* Cycle to the next toplevel
-        if (wl_list_length(&server->toplevels) < 2) {
-            break;
-        }
-        wm_toplevel *next_toplevel =
-            wl_container_of(server->toplevels.prev, next_toplevel, link);
-        focus_toplevel(next_toplevel);
-         */
-        break;
-    case XKB_KEY_F2:
-        /*
-        setenv("WAYLAND_DISPLAY", socket, true);
-        if (fork() == 0) {
-            execl("/bin/sh", "/bin/sh", "-c", "kitty", (void *)NULL);
-        }*/
-        break;
-    default:
-        return false;
-    }
-    return true;
+    return found_key;
 }
 
 static void keyboard_handle_key(struct wl_listener *listener, void *data) {
@@ -197,7 +176,7 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
 
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
-    if ((modifiers & WLR_MODIFIER_ALT) &&
+    if ((modifiers & wm_config->mod_key) &&
             event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         /* If alt is held down and this button was _pressed_, we attempt to
         * process it as a compositor keybinding. */
