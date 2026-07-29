@@ -156,7 +156,7 @@ config* ReadConfigFile(const char* path){
         char *section = NULL;
         while(fgets(line, sizeof(line), config_file)){
             printf("line %s\n", line);
-            if(strstr(line, "#")) continue;
+            if(strstr(line, "#") || line[0] == '\0' || line[0] == '\n') continue;
             if(!inSection){
                 printf("looking for sections\n");
                 if((section = strtok(line, "{"))){
@@ -189,7 +189,7 @@ config* ReadConfigFile(const char* path){
                     printf("data_value: %s\n", data_value);
 
                     if(sectionId == 3){
-                        Key supportedKeys[49];
+                        Key supportedKeys[53];
                         CreateKeyList(supportedKeys);
 
                         if(supportedKeys == NULL) return NULL;

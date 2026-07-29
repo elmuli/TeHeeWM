@@ -58,7 +58,8 @@ void ClayWindow(Clay_ElementId id){
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
             .padding = CLAY_PADDING_ALL(wm_config->containerPadding),
             .childGap = wm_config->containerGap
-        }
+        },
+        .border = { .width = { 4, 4, 4, 4, 0}, .color = {255, 0, 150 , 100}},
     }){};
 }
 
@@ -85,30 +86,6 @@ Clay_RenderCommandArray CreateClayLayout(){
     };
 
     return Clay_EndLayout(1.0f);
-}
-
-void WM_RenderClay(){
-
-    for (int k=0;k<containerCount;k++){
-        container *container = containers[k];
-        for(int i=0;i<container->windowCount;i++){
-            window *window = container->windows[i];
-            if (window->toplevel != NULL){
-                wm_toplevel *toplevel = window->toplevel;
-                Clay_ElementData element = Clay_GetElementData(window->clay_id);
-                window->sizex = element.boundingBox.width;
-                window->sizey = element.boundingBox.height;
-                window->posx = element.boundingBox.x;
-                window->posy = element.boundingBox.y;
-                //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
-                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
-                wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
-            }else{
-                printf("toplevel NULL, not drawing\n");
-            }
-        }
-    }
-
 }
 
 void removeContainerFromArray(int index){
@@ -166,3 +143,133 @@ void focus_next_container(int currentFocus){
         selectedContainerIndex = currentFocus+1;
     }
 }
+
+static struct wm_clay_border *FindClayBorder(wm_clay_ui *ui, uint32_t id){
+    wm_clay_border *border;
+    wl_list_for_each(border, &ui->borders, link){
+        if(border->clay_id == id){
+            return border;
+        }
+    }
+    return NULL;
+}
+
+static struct wm_clay_border *CreateClayBorder(wm_clay_ui *ui, uint32_t id){
+    wm_clay_border *border = calloc(1, sizeof(*border));
+    border->clay_id = id;
+    float transparent[4] = {255,0,0,255};
+    for(int i=0;i<4;i++){
+        border->rect[i] = wlr_scene_rect_create(ui->tree, 1, 1, transparent);
+    }
+    wl_list_insert(&ui->borders, &border->link);
+    return border;
+}
+
+static void DestroyClayBorder(wm_clay_border *border){
+    for(int i=0;i<4;i++){
+        wlr_scene_node_destroy(&border->rect[i]->node);
+    }
+    wl_list_remove(&border->link);
+    free(border);
+}
+
+static void DrawClayBorder(wm_clay_ui *ui, Clay_RenderCommand *cmd){
+    Clay_BoundingBox box = cmd->boundingBox;
+    //printf("boundingBox: x: %d, y: %d, width: %d, height: %d\n", (int)box.x, (int)box.y, (int)box.width, (int)box.height);
+    Clay_BorderRenderData clay_border = cmd->renderData.border;
+
+    wm_clay_border *border = FindClayBorder(ui, cmd->id);
+    if(!border){
+        border = CreateClayBorder(ui, cmd->id);
+    }
+    border->seenThisFrame = true;
+
+    float border_color[4] = {
+        clay_border.color.r / 255.0f,
+        clay_border.color.g / 255.0f,
+        clay_border.color.b / 255.0f,
+        clay_border.color.a / 255.0f,
+    };
+
+    //printf("border width: %d, box x: %d, box y: %d, \n", clay_border.width.top, box.x, box.y);
+    struct {int w, x, y, rw, rh; } edges[4] = {
+        {clay_border.width.top, (int)(box.x), (int)box.y, (int)box.width, clay_border.width.top},
+
+        {clay_border.width.right,  (int)(box.x + box.width - clay_border.width.right), (int)box.y,
+            clay_border.width.right, (int)box.height },
+
+        {clay_border.width.bottom, (int)box.x, (int)(box.y + box.height - clay_border.width.bottom),
+            (int)box.width, clay_border.width.bottom },
+
+        {clay_border.width.left, (int)box.x, (int)box.y, clay_border.width.left, (int)box.height },
+    };
+
+    for (int i=0;i<4;i++){
+        //printf("edge%i: w:%d, x:%d, y:%d, rw:%d, rh:%d\n",i, edges[i].w, edges[i].x, edges[i].y, edges[i].rw, edges[i].rh);
+        if(edges[i].w > 0){
+            wlr_scene_rect_set_size(border->rect[i], edges[i].rw, edges[i].rh);
+            wlr_scene_node_set_position(&border->rect[i]->node, edges[i].x, edges[i].y);
+            wlr_scene_rect_set_color(border->rect[i], border_color);
+            wlr_scene_node_set_enabled(&border->rect[i]->node, true);
+        }else{
+            wlr_scene_node_set_enabled(&border->rect[i]->node, false);
+        }
+    }
+}
+
+void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
+    for (int k=0;k<containerCount;k++){
+        container *container = containers[k];
+        for(int i=0;i<container->windowCount;i++){
+            window *window = container->windows[i];
+            if (window->toplevel != NULL){
+                wm_toplevel *toplevel = window->toplevel;
+                Clay_ElementData element = Clay_GetElementData(window->clay_id);
+                window->sizex = element.boundingBox.width;
+                window->sizey = element.boundingBox.height;
+                window->posx = element.boundingBox.x;
+                window->posy = element.boundingBox.y;
+                //printf("set window %i: pos %d,%d and size %dx%d\n",i,window->posx,window->posy,window->sizex,window->sizey);
+                wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, window->sizex, window->sizey);
+                wlr_scene_node_set_position(&toplevel->scene_tree->node, window->posx, window->posy);
+            }else{
+                printf("toplevel NULL, not drawing\n");
+            }
+        }
+    }
+
+    wm_clay_border *border, *tmp;
+    wl_list_for_each(border, &ui->borders, link){
+        border->seenThisFrame = false;
+    }
+
+    if(commandArray != NULL){
+        for(int32_t i=0;i<commandArray->length;i++){
+            Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(commandArray, i);
+            if(cmd->commandType == CLAY_RENDER_COMMAND_TYPE_BORDER){
+                DrawClayBorder(ui, cmd);
+            }
+        }
+    }
+
+    wl_list_for_each_safe(border, tmp, &ui->borders, link) {
+        if(!border->seenThisFrame){
+            DestroyClayBorder(border);
+        }
+    }
+
+}
+
+void ClayUiInit(wm_clay_ui *ui, struct wlr_scene_tree *parent){
+    ui->tree = wlr_scene_tree_create(parent);
+    wl_list_init(&ui->borders);
+}
+
+void ClayUiCleanup(wm_clay_ui *ui){
+    wm_clay_border *border, *tmp;
+    wl_list_for_each_safe(border, tmp, &ui->borders, link) {
+        DestroyClayBorder(border);
+    }
+        wlr_scene_node_destroy(&ui->tree->node);
+}
+

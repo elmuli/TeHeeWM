@@ -108,6 +108,7 @@ void exec_cmd(void *self, wm_server *server){
     if (fork() == 0) {
         execl("/bin/sh", "/bin/sh", "-c", cmd, (void *)NULL);
     }
+    printf("called: %s\n", cmd);
 }
 
 void cycle_toplevel(void *self, wm_server *server){
@@ -148,9 +149,11 @@ static bool handle_keybinding(wm_server *server, xkb_keysym_t sym) {
         keybind *bind = wm_config->binds[i];
         printf("key_sym: %d , sym: %d\n", bind->key_sym, sym);
         if(sym == bind->key_sym){
-            char *cmd = (char *)malloc(bind->cmd_len);
-            strcpy(cmd, bind->cmd);
-            if(cmd != NULL) printf("bind cmd: %s\n", cmd);
+            if(bind->cmd_len > 0){
+                char *cmd = (char *)malloc(bind->cmd_len);
+                strcpy(cmd, bind->cmd);
+                if(cmd != NULL) printf("bind cmd: %s\n", cmd);
+            }
             bind->action(bind, server);
             found_key = true;
             break;
@@ -309,8 +312,8 @@ static void output_frame(struct wl_listener *listener, void *data) {
     wlr_output_effective_resolution(output->wlr_output, &width, &height);
     Clay_SetLayoutDimensions((Clay_Dimensions) { (float) width, (float) height });
 
-    WM_RenderClay();
-    wlr_scene_output_commit(scene_output, NULL);
+    WM_RenderClay(&output->server->clay_ui, &output->server->ClayRenderCommandArray);
+	wlr_scene_output_commit(scene_output, NULL);
 
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -428,9 +431,9 @@ static void xdg_toplevel_unmap(struct wl_listener *listener, void *data) {
         if(foundWindow) break;
     }
 
+    toplevel->server->ClayRenderCommandArray = CreateClayLayout();
 	wl_list_remove(&toplevel->link);
     printf("unmapped toplevel\n");
-    CreateClayLayout();
 }
 
 static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
@@ -445,13 +448,14 @@ static void xdg_toplevel_commit(struct wl_listener *listener, void *data) {
         wlr_xdg_toplevel_set_size(toplevel->xdg_toplevel, 0, 0);
 	}
 
-    CreateClayLayout();
+    toplevel->server->ClayRenderCommandArray = CreateClayLayout();
 }
 
 static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
 	/* Called when the xdg_toplevel is destroyed. */
 	wm_toplevel *toplevel = wl_container_of(listener, toplevel, destroy);
 
+    toplevel->server->ClayRenderCommandArray = CreateClayLayout();
     printf("freeing toplevel links\n");
 	wl_list_remove(&toplevel->map.link);
 	wl_list_remove(&toplevel->unmap.link);
@@ -461,7 +465,6 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
     free(toplevel);
     printf("destroyed and freed toplevel\n");
     
-    CreateClayLayout();
 }
 
 static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
@@ -616,6 +619,7 @@ int main(int argc, char *argv[])
     printf("Setting up scene\n");
 	server.scene = wlr_scene_create();
 	server.scene_layout = wlr_scene_attach_output_layout(server.scene, server.output_layout);
+    ClayUiInit(&server.clay_ui, &server.scene->tree);
 
     printf("Setting up toplevels and xdg\n");
 	wl_list_init(&server.toplevels);
@@ -654,7 +658,6 @@ int main(int argc, char *argv[])
     };
 
     Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920,  1080 }, (Clay_ErrorHandler) { 0 });
-
 
     if(wm_config == NULL){
         return 1;
