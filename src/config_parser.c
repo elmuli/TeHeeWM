@@ -150,7 +150,7 @@ config* ReadConfigFile(const char* path){
     }else{
         int sectionId = 0;
         bool inSection = false;
-
+        bool inBorder = false;
 
         char line[100];
         char *section = NULL;
@@ -179,7 +179,8 @@ config* ReadConfigFile(const char* path){
                 char *data = NULL;
                 int value = 0;
                 if(strstr(line, "}")){
-                    inSection = false;
+                    if(inBorder) inBorder = false;
+                    else inSection = false;
                     sectionId = 0;
                     continue;
                 }
@@ -229,17 +230,81 @@ config* ReadConfigFile(const char* path){
                         if(data_value != NULL) value = atoi(data_value);
                         printf("value: %i\n", value);
 
-                        if(strstr(data, "gap")){
-                            if(sectionId == 1){
-                                Configuration->windowGap = value;
-                            }else if(sectionId == 2){
-                                Configuration->containerGap = value;
+                        if(inBorder){
+                            if(strstr(data, "true")) Configuration->windowBorder = true;
+                            else if(strstr(data, "false")) {Configuration->windowBorder = false;}
+                            else if(strstr(data, "size")){
+                                char *tmp =  NULL;
+                                if((tmp = strtok(data, "("))){
+                                    printf("tmp: %s\n", tmp);
+                                    for(int i=0;i<3;i++){
+                                        char* value = NULL;
+                                        if((value = strtok(NULL, ","))){
+                                            printf("value %s\n", value);
+                                            if(sectionId == 1){
+                                                Configuration->windowBorderSize[i] = atoi(value);
+                                            }else if(sectionId == 2){
+                                                Configuration->containerBorderSize[i] = atoi(value);
+                                            }
+                                        }else{
+                                            break;
+                                        }
+                                    }
+                                    char* value = NULL;
+                                    if((value = strtok(NULL, ")"))){
+                                        printf("value %s\n", value);
+                                        if(sectionId == 1){
+                                            Configuration->windowBorderSize[3] = atoi(value);
+                                        }else if (sectionId == 2) {
+                                            Configuration->containerBorderSize[3] = atoi(value);
+                                        }
+                                    }
+                                }
+                            }else if(strstr(data, "rgba")){
+                                char *tmp =  NULL;
+                                if((tmp = strtok(data, "("))){
+                                    printf("tmp: %s\n", tmp);
+                                    for(int i=0;i<3;i++){
+                                        char* value = NULL;
+                                        if((value = strtok(NULL, ","))){
+                                            printf("value %s\n", value);
+                                            if(sectionId == 1){
+                                                Configuration->windowBorderColor[i] = atoi(value);
+                                            }else if(sectionId == 2){
+                                                Configuration->containerBorderColor[i] = atoi(value);
+                                            }
+                                        }else{
+                                            break;
+                                        }
+                                    }
+                                    char* value = NULL;
+                                    if((value = strtok(NULL, ")"))){
+                                        printf("value %s\n", value);
+                                        if(sectionId == 1){
+                                            Configuration->windowBorderColor[3] = atoi(value);
+                                        }else if(sectionId == 2){
+                                            Configuration->containerBorderColor[3] = atoi(value);
+                                        }
+                                    }
+                                }
+                            }else if(strstr(data, "}")){
+                                inBorder = false;
                             }
-                        }else if(strstr(data, "padding")){
-                            if(sectionId == 1){
-                                Configuration->windowPadding = value;
-                            }else if(sectionId == 2){
-                                Configuration->containerPadding = value;
+                        }else if(strstr(data, "border")){
+                            inBorder = true;
+                        }else {
+                            if(strstr(data, "gap")){
+                                if(sectionId == 1){
+                                    Configuration->windowGap = value;
+                                }else if(sectionId == 2){
+                                    Configuration->containerGap = value;
+                                }
+                            }else if(strstr(data, "padding")){
+                                if(sectionId == 1){
+                                    Configuration->windowPadding = value;
+                                }else if(sectionId == 2){
+                                    Configuration->containerPadding = value;
+                                }
                             }
                         }
                     }

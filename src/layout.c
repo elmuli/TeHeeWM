@@ -32,6 +32,15 @@ Clay_ElementDeclaration containerLayoutConfigVertical(){
             },
             .childGap = wm_config->windowGap
         },
+        .border = { .width = { wm_config->containerBorderSize[0], 
+                                wm_config->containerBorderSize[1], 
+                                wm_config->containerBorderSize[2], 
+                                wm_config->containerBorderSize[3], 0}, 
+                    .color = {wm_config->containerBorderColor[0], 
+                                wm_config->containerBorderColor[1], 
+                                wm_config->containerBorderColor[2], 
+                                wm_config->containerBorderColor[3]}
+        },
     };
 }
 
@@ -48,6 +57,15 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
             },
             .childGap = wm_config->windowGap
         },
+        .border = { .width = { wm_config->containerBorderSize[0], 
+                                wm_config->containerBorderSize[1], 
+                                wm_config->containerBorderSize[2], 
+                                wm_config->containerBorderSize[3], 0}, 
+                    .color = {wm_config->containerBorderColor[0], 
+                                wm_config->containerBorderColor[1], 
+                                wm_config->containerBorderColor[2], 
+                                wm_config->containerBorderColor[3]}
+        },
     };
 }
 
@@ -59,7 +77,15 @@ void ClayWindow(Clay_ElementId id){
             .padding = CLAY_PADDING_ALL(wm_config->containerPadding),
             .childGap = wm_config->containerGap
         },
-        .border = { .width = { 4, 4, 4, 4, 0}, .color = {255, 0, 150 , 100}},
+        .border = { .width = { wm_config->windowBorderSize[0], 
+                                wm_config->windowBorderSize[1], 
+                                wm_config->windowBorderSize[2], 
+                                wm_config->windowBorderSize[3], 0}, 
+                    .color = {wm_config->windowBorderColor[0], 
+                                wm_config->windowBorderColor[1], 
+                                wm_config->windowBorderColor[2], 
+                                wm_config->windowBorderColor[3]}
+        },
     }){};
 }
 

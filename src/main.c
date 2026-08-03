@@ -180,7 +180,8 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
     bool handled = false;
     uint32_t modifiers = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
     if ((modifiers & wm_config->mod_key) &&
-            event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+            event->state == WL_KEYBOARD_KEY_STATE_PRESSED || (modifiers & WLR_MODIFIER_ALT) &&
+			event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         /* If alt is held down and this button was _pressed_, we attempt to
         * process it as a compositor keybinding. */
         for (int i = 0; i < nsyms; i++) {

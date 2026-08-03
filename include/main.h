@@ -48,8 +48,15 @@ typedef struct keybind{
 typedef struct config{
     int windowGap;
     int windowPadding;
+    bool windowBorder;
+    int windowBorderSize[4];
+    float windowBorderColor[4];
+
     int containerGap;
     int containerPadding;
+    int containerBorderSize[4];
+    float containerBorderColor[4];
+
     keybind **binds;
     uint32_t mod_key;
     size_t keybind_count;
