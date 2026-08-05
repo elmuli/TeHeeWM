@@ -182,8 +182,7 @@ static void keyboard_handle_key(struct wl_listener *listener, void *data) {
     if ((modifiers & wm_config->mod_key) &&
             event->state == WL_KEYBOARD_KEY_STATE_PRESSED || (modifiers & WLR_MODIFIER_ALT) &&
 			event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        /* If alt is held down and this button was _pressed_, we attempt to
-        * process it as a compositor keybinding. */
+        /* if mod key is pressed process it as a compositor keybinding. */
         for (int i = 0; i < nsyms; i++) {
             handled = handle_keybinding(server, syms[i]);
         }

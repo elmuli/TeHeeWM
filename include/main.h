@@ -149,6 +149,8 @@ struct wm_server{
 
 	struct wlr_seat *seat;
 	struct wl_listener new_input;
+	struct wl_listener request_cursor;
+	enum tinywl_cursor_mode cursor_mode;
 	struct wl_listener request_set_selection;
 	struct wl_listener pointer_focus_change;
 	struct wl_list keyboards;
