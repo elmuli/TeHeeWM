@@ -124,6 +124,7 @@ void removeContainerFromArray(int index){
         containers[i] = containers[i + 1];
     }
 
+    printf("container count: %d\n", containerCount);
     containerCount--;
 }
 

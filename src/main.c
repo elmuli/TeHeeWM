@@ -259,6 +259,9 @@ static void server_new_input(struct wl_listener *listener, void *data) {
     case WLR_INPUT_DEVICE_KEYBOARD:
         server_new_keyboard(server, device);
         break;
+	case WLR_INPUT_DEVICE_POINTER:
+		server_new_pointer(server, device);
+		break;
     default:
         break;
     }
@@ -301,7 +304,7 @@ static void seat_request_cursor(struct wl_listener *listener, void *data) {
 }
 
 static void reset_cursor_mode(struct wm_server *server) {
-	server->cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
+	server->cursor_mode = WM_CURSOR_PASSTHROUGH;
 	server->grabbed_toplevel = NULL;
 }
 
@@ -353,7 +356,7 @@ static struct wm_toplevel *desktop_toplevel_at(
 
 static void process_cursor_motion(struct wm_server *server, uint32_t time) {
 	/* If the mode is non-passthrough, delegate to those functions. */
-	if (server->cursor_mode == TINYWL_CURSOR_MOVE) {
+	if (server->cursor_mode == WM_CURSOR_MOVE) {
 		process_cursor_move(server);
 		return;
 	}
@@ -809,7 +812,7 @@ int main(int argc, char *argv[])
 	wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
 	server.cursor_mgr = wlr_xcursor_manager_create("default", 24);
     if(!wlr_xcursor_manager_load(server.cursor_mgr, 1)) printf("no cursor theme\n");
-	server.cursor_mode = TINYWL_CURSOR_PASSTHROUGH;
+	server.cursor_mode = WM_CURSOR_PASSTHROUGH;
 	server.cursor_motion.notify = server_cursor_motion;
 	wl_signal_add(&server.cursor->events.motion, &server.cursor_motion);
 	server.cursor_motion_absolute.notify = server_cursor_motion_absolute;
@@ -834,6 +837,15 @@ int main(int argc, char *argv[])
 	server.new_input.notify = server_new_input;
 	wl_signal_add(&server.backend->events.new_input, &server.new_input);
 	server.seat = wlr_seat_create(server.wl_display, "seat0");
+    server.request_cursor.notify = seat_request_cursor;
+	wl_signal_add(&server.seat->events.request_set_cursor,
+			&server.request_cursor);
+	server.pointer_focus_change.notify = seat_pointer_focus_change;
+	wl_signal_add(&server.seat->pointer_state.events.focus_change,
+			&server.pointer_focus_change);
+	server.request_set_selection.notify = seat_request_set_selection;
+	wl_signal_add(&server.seat->events.request_set_selection,
+			&server.request_set_selection);
 
     wm_config = ReadConfigFile("config.conf");
 

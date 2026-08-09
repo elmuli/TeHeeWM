@@ -1,3 +1,7 @@
+# Needed envs for running in nested wayland:
+
+NO_HARDWARE_CURSORS=1
+
 # TinyWL
 
 This is the "minimum viable product" Wayland compositor based on wlroots. It
