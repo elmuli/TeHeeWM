@@ -125,6 +125,11 @@ void focus_next_container(int);
 void removeWindowFromArray(int, int);
 void removeContainerFromArray(int);
 
+enum wm_cursor_mode {
+	TINYWL_CURSOR_PASSTHROUGH,
+	TINYWL_CURSOR_MOVE,
+	TINYWL_CURSOR_RESIZE,
+};
 
 struct wm_server{
 	struct wl_display *wl_display;
@@ -150,10 +155,14 @@ struct wm_server{
 	struct wlr_seat *seat;
 	struct wl_listener new_input;
 	struct wl_listener request_cursor;
-	enum tinywl_cursor_mode cursor_mode;
+	enum wm_cursor_mode cursor_mode;
 	struct wl_listener request_set_selection;
 	struct wl_listener pointer_focus_change;
 	struct wl_list keyboards;
+	struct wm_toplevel *grabbed_toplevel;
+	double grab_x, grab_y;
+	struct wlr_box grab_geobox;
+	uint32_t resize_edges;
 
 	struct wlr_output_layout *output_layout;
 	struct wl_list outputs;
