@@ -98,9 +98,17 @@ typedef struct wm_clay_border {
     struct wl_list link;
 } wm_clay_border;
 
+typedef struct wm_clay_rectangle {
+    uint32_t clay_id;
+    struct wlr_scene_rect *rect;
+    bool seenThisFrame;
+    struct wl_list link;
+} wm_clay_rectangle;
+
 struct wm_clay_ui {
     struct wlr_scene_tree *tree;
     struct wl_list borders;
+    struct wl_list rectangles;
 };
 
 enum { EDGE_TOP = 0, EDGE_RIGHT, EDGE_BOTTOM, EDGE_LEFT };

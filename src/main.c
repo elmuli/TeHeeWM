@@ -568,6 +568,8 @@ static void server_new_output(struct wl_listener *listener, void *data) {
     wlr_output_effective_resolution(output2->wlr_output, &width, &height);
     printf("output size %dx%d\n", width, height);
     Clay_SetLayoutDimensions((Clay_Dimensions) { (float) width, (float) height });
+    WM_RenderClay(&output2->server->clay_ui, &output2->server->ClayRenderCommandArray);
+    
 
 	/* Adds this to the output layout. The add_auto function arranges outputs
 	 * from left-to-right in the order they appear. A more sophisticated
@@ -897,6 +899,7 @@ int main(int argc, char *argv[])
 	wlr_log(WLR_INFO, "Running Wayland compositor on WAYLAND_DISPLAY=%s",socket);
 	wl_display_run(server.wl_display);
 
+    printf("cleaning bind commands\n");
     for (int i=0;i<wm_config->keybind_count;i++){
         keybind *bind = wm_config->binds[i];
         if(bind->cmd != NULL) free(bind->cmd);

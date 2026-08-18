@@ -95,12 +95,21 @@ Clay_RenderCommandArray CreateClayLayout(){
 
     CLAY(CLAY_ID("MainContainer"), {
         .layout = {
-            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
             .padding = CLAY_PADDING_ALL(5),
             .childGap = 5
         }
     }){
+        CLAY(CLAY_ID("testContainer"), {
+            .layout = {
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_FIXED(10)},
+                .padding = CLAY_PADDING_ALL(3),
+                .childGap = 2
+            },
+            .backgroundColor = (Clay_Color){100, 10, 50, 255}
+        }){};
         for (int k=0;k<containerCount;k++){
             CLAY(containers[k]->clay_id, containers[k]->layoutConfig){
                 for (int i=0;i<containers[k]->windowCount;i++){
@@ -181,6 +190,16 @@ static struct wm_clay_border *FindClayBorder(wm_clay_ui *ui, uint32_t id){
     return NULL;
 }
 
+static struct wm_clay_rectangle *FindClayRectangle(wm_clay_ui *ui, int32_t id){
+    wm_clay_rectangle *rectangle;
+    wl_list_for_each(rectangle, &ui->rectangles, link){
+        if(rectangle->clay_id == id){
+            return rectangle;
+        }
+    }
+    return NULL;
+}
+
 static struct wm_clay_border *CreateClayBorder(wm_clay_ui *ui, uint32_t id){
     wm_clay_border *border = calloc(1, sizeof(*border));
     border->clay_id = id;
@@ -192,12 +211,27 @@ static struct wm_clay_border *CreateClayBorder(wm_clay_ui *ui, uint32_t id){
     return border;
 }
 
+static struct wm_clay_rectangle *CreateClayRectangle(wm_clay_ui *ui, uint32_t id){
+    wm_clay_rectangle *rectangle = calloc(1, sizeof(*rectangle));
+    rectangle->clay_id = id;
+    float transparent[4] = {255,0,0,255};
+    rectangle->rect = wlr_scene_rect_create(ui->tree, 1, 1, transparent);
+    wl_list_insert(&ui->rectangles, &rectangle->link);
+    return rectangle;
+}
+
 static void DestroyClayBorder(wm_clay_border *border){
     for(int i=0;i<4;i++){
         wlr_scene_node_destroy(&border->rect[i]->node);
     }
     wl_list_remove(&border->link);
     free(border);
+}
+
+static void DestroyClayRectangle(wm_clay_rectangle *rectangle){
+    wlr_scene_node_destroy(&rectangle->rect->node);
+    wl_list_remove(&rectangle->link);
+    free(rectangle);
 }
 
 static void DrawClayBorder(wm_clay_ui *ui, Clay_RenderCommand *cmd){
@@ -244,6 +278,29 @@ static void DrawClayBorder(wm_clay_ui *ui, Clay_RenderCommand *cmd){
     }
 }
 
+static void DrawClayRectangle(wm_clay_ui *ui, Clay_RenderCommand *cmd){
+    Clay_BoundingBox box = cmd->boundingBox;
+    Clay_RectangleRenderData config = cmd->renderData.rectangle;
+
+    wm_clay_rectangle *rectangle = FindClayRectangle(ui, cmd->id);
+    if(!rectangle){
+        rectangle = CreateClayRectangle(ui, cmd->id);
+    }
+    rectangle->seenThisFrame = true;
+
+    float rect_color[4] = {
+        config.backgroundColor.r / 255.0f,
+        config.backgroundColor.g / 255.0f,
+        config.backgroundColor.b / 255.0f,
+        config.backgroundColor.a / 255.0f,
+    };
+
+    wlr_scene_rect_set_size(rectangle->rect, box.width, box.height);
+    wlr_scene_node_set_position(&rectangle->rect->node, box.x, box.y);
+    wlr_scene_rect_set_color(rectangle->rect, rect_color);
+    wlr_scene_node_set_enabled(&rectangle->rect->node, true);
+}
+
 void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
     for (int k=0;k<containerCount;k++){
         container *container = containers[k];
@@ -275,6 +332,8 @@ void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
             Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(commandArray, i);
             if(cmd->commandType == CLAY_RENDER_COMMAND_TYPE_BORDER){
                 DrawClayBorder(ui, cmd);
+            }else if (cmd->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE){
+                DrawClayRectangle(ui, cmd);
             }
         }
     }
@@ -290,6 +349,7 @@ void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
 void ClayUiInit(wm_clay_ui *ui, struct wlr_scene_tree *parent){
     ui->tree = wlr_scene_tree_create(parent);
     wl_list_init(&ui->borders);
+    wl_list_init(&ui->rectangles);
 }
 
 void ClayUiCleanup(wm_clay_ui *ui){
