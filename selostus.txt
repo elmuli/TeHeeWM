@@ -1,0 +1,5 @@
+Tämä työ on linux käyttöjärjestelmille wayland protokolla toimiva ikkunointi järjestelmä.
+
+Tarkemmin kyseessä on Tiling WM (tiilitetty ikkuna manageri), eli ikkunat ovat jaettu omiin tiileihin niin, että yksikään ei ole toisten ikkunoiden alla. Tämän idea on se että ikkunamanageri hoitaa ikkuoiden sijoituksen käyttäjän puolesta.
+
+Tätä WM:ää voi konfiguroida käyttäen luoamaani koniguraatio kieltä tiedostossa config.conf, tällä voi määrittää erilaisia asioita kuten ikkunoiden välisiä rakoja ja niiden reunusten kokoa ja värejä, sekä siinä voi määritää erilaisia näppäinyhdistelmiä, jotta voi käyttää WM:ää tehokkaasti.
