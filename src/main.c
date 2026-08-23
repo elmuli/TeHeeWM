@@ -27,6 +27,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "main.h"
+#include "lib/clay.h"
 
 int containerCount = 0;
 struct container **containers;
@@ -453,7 +454,15 @@ static void server_cursor_axis(struct wl_listener *listener, void *data) {
 	struct wm_server *server =
 		wl_container_of(listener, server, cursor_axis);
 	struct wlr_pointer_axis_event *event = data;
-	/* Notify the client with pointer focus of the axis event. */
+	/* Notify the client with pointer focus of the axis event. */ 
+    
+    Clay_Vector2 mousePosition = { server->cursor->x, server->cursor->y };
+    Clay_SetPointerState(mousePosition, false);
+    double mouseWheelX = 0;
+    double mouseWheelY = event->delta;
+    printf("scroll delta: %f\n", mouseWheelY);
+    Clay_UpdateScrollContainers(true, (Clay_Vector2) { mouseWheelX, mouseWheelY }, 0.016);
+
 	wlr_seat_pointer_notify_axis(server->seat,
 			event->time_msec, event->orientation, event->delta,
 			event->delta_discrete, event->source, event->relative_direction);

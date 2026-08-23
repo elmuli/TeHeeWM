@@ -71,12 +71,12 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
 
 void ClayWindow(Clay_ElementId id){
     CLAY(id, {
-        .layout = {
+        /*.layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
             .padding = CLAY_PADDING_ALL(wm_config->containerPadding),
             .childGap = wm_config->containerGap
-        },
+        },*/
         .border = { .width = { wm_config->windowBorderSize[0], 
                                 wm_config->windowBorderSize[1], 
                                 wm_config->windowBorderSize[2], 
@@ -86,6 +86,7 @@ void ClayWindow(Clay_ElementId id){
                                 wm_config->windowBorderColor[2], 
                                 wm_config->windowBorderColor[3]}
         },
+        .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() },
     }){};
 }
 
@@ -110,13 +111,22 @@ Clay_RenderCommandArray CreateClayLayout(){
             },
             .backgroundColor = (Clay_Color){100, 10, 50, 255}
         }){};
-        for (int k=0;k<containerCount;k++){
-            CLAY(containers[k]->clay_id, containers[k]->layoutConfig){
-                for (int i=0;i<containers[k]->windowCount;i++){
-                    ClayWindow(containers[k]->windows[i]->clay_id);
+        CLAY(CLAY_ID("WindowContainer"), {
+            .layout = {
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1)},
+                .padding = CLAY_PADDING_ALL(0),
+                .childGap = 0
+            },
+        }){
+            for (int k=0;k<containerCount;k++){
+                CLAY(containers[k]->clay_id, containers[k]->layoutConfig){
+                    for (int i=0;i<containers[k]->windowCount;i++){
+                        ClayWindow(containers[k]->windows[i]->clay_id);
+                    }
                 }
             }
-        }
+        };
 
     };
 
