@@ -14,10 +14,35 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_buffer.h>
+#include <wlr/interfaces/wlr_buffer.h>
+
+#include <pango/pango.h>
+#include <pango/pangocairo.h>
+#include <cairo/cairo.h>
 
 #include "main.h"
 #define CLAY_IMPLEMENTATION
 #include "lib/clay.h"
+
+Clay_Dimensions measure_text(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
+    PangoFontDescription *desc = pango_font_description_from_string("Sans");
+    pango_font_description_set_size(desc, config->fontSize * PANGO_SCALE);
+
+    PangoContext *ctx = pango_font_map_create_context(pango_cairo_font_map_get_default());
+    PangoLayout *layout = pango_layout_new(ctx);
+    pango_layout_set_font_description(layout, desc);
+    pango_layout_set_text(layout, text.chars, text.length);
+
+    int w, h;
+    pango_layout_get_pixel_size(layout, &w, &h);
+
+    g_object_unref(layout);
+    g_object_unref(ctx);
+    pango_font_description_free(desc);
+
+    return (Clay_Dimensions) { (float)w, (float)h };
+}
 
 Clay_ElementDeclaration containerLayoutConfigVertical(){
     printf("padding %d\n", wm_config->windowPadding);
@@ -69,6 +94,13 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
     };
 }
 
+Clay_TextElementConfig normalTextConfig = (Clay_TextElementConfig){
+    .fontId = 1,
+    .fontSize = 14, 
+    .textColor = (Clay_Color){120, 120, 120, 255},
+    .wrapMode = CLAY_TEXT_WRAP_NEWLINES
+};
+
 void ClayWindow(Clay_ElementId id){
     CLAY(id, {
         /*.layout = {
@@ -86,7 +118,6 @@ void ClayWindow(Clay_ElementId id){
                                 wm_config->windowBorderColor[2], 
                                 wm_config->windowBorderColor[3]}
         },
-        .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() },
     }){};
 }
 
@@ -110,7 +141,9 @@ Clay_RenderCommandArray CreateClayLayout(){
                 .childGap = 2
             },
             .backgroundColor = (Clay_Color){100, 10, 50, 255}
-        }){};
+        }){
+            CLAY_TEXT(CLAY_STRING("test"), normalTextConfig);
+        };
         CLAY(CLAY_ID("WindowContainer"), {
             .layout = {
                 .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -311,6 +344,89 @@ static void DrawClayRectangle(wm_clay_ui *ui, Clay_RenderCommand *cmd){
     wlr_scene_node_set_enabled(&rectangle->rect->node, true);
 }
 
+static struct wlr_buffer *text_pixel_buffer_create(unsigned char *data,
+        uint32_t format, int width, int height, size_t stride) {
+    struct text_buffer_impl *buffer = calloc(1, sizeof(*buffer));
+    if (!buffer) {
+        return NULL;
+    }
+    wlr_buffer_init(&buffer->base, &text_buffer_impl, width, height);
+    buffer->data = data;
+    buffer->format = format;
+    buffer->stride = stride;
+    return &buffer->base;
+}
+
+static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text, int length, double fontSize, Clay_Color color){
+    float r = color.r / 255.0f;
+    float g = color.g / 255.0f;
+    float b = color.b / 255.0f;
+    float a = color.a / 255.0f;
+
+    cairo_surface_t *tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 0, 0);
+    cairo_t *tcr = cairo_create(tmp);
+    PangoLayout *layout = pango_cairo_create_layout(tcr);
+    PangoFontDescription *desc = pango_font_description_from_string("Sans");
+    pango_font_description_set_size(desc, fontSize * PANGO_SCALE);
+    pango_layout_set_font_description(layout, desc);
+    pango_layout_set_text(layout, text, length);
+
+    int w, h;
+    pango_layout_get_pixel_size(layout, &w, &h);
+    g_object_unref(layout);
+    cairo_destroy(tcr);
+    cairo_surface_destroy(tmp);
+
+    if (w <= 0 || h <= 0) {
+        pango_font_description_free(desc);
+        return NULL;
+    }
+
+    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    cairo_t *cr = cairo_create(surface);
+    layout = pango_cairo_create_layout(cr);
+    pango_layout_set_font_description(layout, desc);
+    pango_layout_set_text(layout, text, length);
+
+    cairo_set_source_rgba(cr, r, g, b, a);
+    pango_cairo_show_layout(cr, layout);
+    cairo_surface_flush(surface);
+
+    int stride = cairo_image_surface_get_stride(surface);
+    unsigned char *data = cairo_image_surface_get_data(surface);
+
+ //  struct wlr_readonly_data_buffer *ro_buffer = wlr_readonly_data_buffer_create(
+ //       WL_SHM_FORMAT_ARGB8888, stride, w, h, data);
+    unsigned char *copy = malloc(stride * h);
+    memcpy(copy, data, stride * h);
+    struct wlr_buffer *buf = text_pixel_buffer_create(copy, WL_SHM_FORMAT_ARGB8888, w, h, stride);
+
+    g_object_unref(layout);
+    pango_font_description_free(desc);
+    cairo_destroy(cr);
+    cairo_surface_destroy(surface);
+
+    if (!buf) {
+        return NULL;
+    }
+
+    struct wlr_scene_buffer *scene_buf =
+        wlr_scene_buffer_create(ui->tree, buf);
+    wlr_buffer_drop(buf);
+
+    return scene_buf;
+}
+
+static void DrawText(wm_clay_ui *ui, Clay_RenderCommand *cmd){
+    Clay_TextRenderData *text = &cmd->renderData.text;
+    struct wlr_scene_buffer *scene_buf = CreateTextNode(ui, text->stringContents.chars,
+        text->stringContents.length,
+        text->fontSize, text->textColor);
+
+    wlr_scene_node_set_position(&scene_buf->node,
+        cmd->boundingBox.x, cmd->boundingBox.y);
+}
+
 void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
     for (int k=0;k<containerCount;k++){
         container *container = containers[k];
@@ -340,10 +456,18 @@ void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
     if(commandArray != NULL){
         for(int32_t i=0;i<commandArray->length;i++){
             Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(commandArray, i);
-            if(cmd->commandType == CLAY_RENDER_COMMAND_TYPE_BORDER){
+            switch (cmd->commandType) {
+            case CLAY_RENDER_COMMAND_TYPE_BORDER:
                 DrawClayBorder(ui, cmd);
-            }else if (cmd->commandType == CLAY_RENDER_COMMAND_TYPE_RECTANGLE){
+                break;
+            case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
                 DrawClayRectangle(ui, cmd);
+                break;
+            case CLAY_RENDER_COMMAND_TYPE_TEXT:
+                DrawText(ui, cmd);
+                break;
+            default:
+                break;
             }
         }
     }

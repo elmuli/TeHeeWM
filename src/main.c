@@ -874,6 +874,9 @@ int main(int argc, char *argv[])
     printf("containers created and memory reserve");
 
     printf("Setting up CLAY\n");
+
+    Clay_SetMeasureTextFunction(measure_text, NULL);
+
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena clayMemory = (Clay_Arena) {
         .memory = malloc(totalMemorySize),

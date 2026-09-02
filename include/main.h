@@ -119,6 +119,8 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal();
 void ClayUiInit(wm_clay_ui *ui, struct wlr_scene_tree *parent);
 void ClayUiCleanup(wm_clay_ui *ui);
 
+Clay_Dimensions measure_text(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData);
+
 extern struct container **containers;
 
 extern int containerCount;
