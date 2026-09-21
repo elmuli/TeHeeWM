@@ -20,29 +20,12 @@
 #include <pango/pango.h>
 #include <pango/pangocairo.h>
 #include <cairo/cairo.h>
+#include <drm_fourcc.h>
 
 #include "main.h"
 #define CLAY_IMPLEMENTATION
 #include "lib/clay.h"
 
-Clay_Dimensions measure_text(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
-    PangoFontDescription *desc = pango_font_description_from_string("Sans");
-    pango_font_description_set_size(desc, config->fontSize * PANGO_SCALE);
-
-    PangoContext *ctx = pango_font_map_create_context(pango_cairo_font_map_get_default());
-    PangoLayout *layout = pango_layout_new(ctx);
-    pango_layout_set_font_description(layout, desc);
-    pango_layout_set_text(layout, text.chars, text.length);
-
-    int w, h;
-    pango_layout_get_pixel_size(layout, &w, &h);
-
-    g_object_unref(layout);
-    g_object_unref(ctx);
-    pango_font_description_free(desc);
-
-    return (Clay_Dimensions) { (float)w, (float)h };
-}
 
 Clay_ElementDeclaration containerLayoutConfigVertical(){
     printf("padding %d\n", wm_config->windowPadding);
@@ -96,19 +79,19 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
 
 Clay_TextElementConfig normalTextConfig = (Clay_TextElementConfig){
     .fontId = 1,
-    .fontSize = 14, 
-    .textColor = (Clay_Color){120, 120, 120, 255},
+    .fontSize = 40, 
+    .textColor = (Clay_Color){255, 255, 255, 255},
     .wrapMode = CLAY_TEXT_WRAP_NEWLINES
 };
 
 void ClayWindow(Clay_ElementId id){
     CLAY(id, {
-        /*.layout = {
+        .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .sizing = { .width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_GROW(1) },
             .padding = CLAY_PADDING_ALL(wm_config->containerPadding),
             .childGap = wm_config->containerGap
-        },*/
+        },
         .border = { .width = { wm_config->windowBorderSize[0], 
                                 wm_config->windowBorderSize[1], 
                                 wm_config->windowBorderSize[2], 
@@ -136,7 +119,7 @@ Clay_RenderCommandArray CreateClayLayout(){
         CLAY(CLAY_ID("testContainer"), {
             .layout = {
                 .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_FIXED(10)},
+                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_FIXED(50)},
                 .padding = CLAY_PADDING_ALL(3),
                 .childGap = 2
             },
@@ -344,90 +327,321 @@ static void DrawClayRectangle(wm_clay_ui *ui, Clay_RenderCommand *cmd){
     wlr_scene_node_set_enabled(&rectangle->rect->node, true);
 }
 
-static struct wlr_buffer *text_pixel_buffer_create(unsigned char *data,
-        uint32_t format, int width, int height, size_t stride) {
-    struct text_buffer_impl *buffer = calloc(1, sizeof(*buffer));
+struct text_pixel_buffer {
+    struct wlr_buffer base;
+
+    unsigned char *data;
+    uint32_t format;
+    size_t stride;
+};
+
+static void text_pixel_buffer_destroy(struct wlr_buffer *wlr_buffer) {
+    struct text_pixel_buffer *buffer =
+        wl_container_of(wlr_buffer, buffer, base);
+
+    free(buffer->data);
+    free(buffer);
+}
+
+static bool text_pixel_buffer_begin_data_ptr_access(
+    struct wlr_buffer *wlr_buffer,
+    uint32_t flags,
+    void **data,
+    uint32_t *format,
+    size_t *stride) {
+
+    struct text_pixel_buffer *buffer =
+        wl_container_of(wlr_buffer, buffer, base);
+
+    *data = buffer->data;
+    *format = buffer->format;
+    *stride = buffer->stride;
+
+    return true;
+}
+
+static void text_pixel_buffer_end_data_ptr_access(
+    struct wlr_buffer *wlr_buffer) {
+    // Nothing to do.
+}
+
+static const struct wlr_buffer_impl text_pixel_buffer_impl = {
+    .destroy = text_pixel_buffer_destroy,
+    .begin_data_ptr_access = text_pixel_buffer_begin_data_ptr_access,
+    .end_data_ptr_access = text_pixel_buffer_end_data_ptr_access,
+};
+
+
+static struct wlr_buffer *text_pixel_buffer_create(
+    unsigned char *data,
+    uint32_t format,
+    int width,
+    int height,
+    size_t stride) {
+
+    struct text_pixel_buffer *buffer = calloc(1, sizeof(*buffer));
     if (!buffer) {
         return NULL;
     }
-    wlr_buffer_init(&buffer->base, &text_buffer_impl, width, height);
+
     buffer->data = data;
     buffer->format = format;
     buffer->stride = stride;
+
+    wlr_buffer_init(
+        &buffer->base,
+        &text_pixel_buffer_impl,
+        width,
+        height
+    );
+
     return &buffer->base;
 }
 
-static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text, int length, double fontSize, Clay_Color color){
+static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text, int length, double fontSize, Clay_Color color) {
+
     float r = color.r / 255.0f;
     float g = color.g / 255.0f;
     float b = color.b / 255.0f;
     float a = color.a / 255.0f;
 
-    cairo_surface_t *tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 0, 0);
-    cairo_t *tcr = cairo_create(tmp);
-    PangoLayout *layout = pango_cairo_create_layout(tcr);
-    PangoFontDescription *desc = pango_font_description_from_string("Sans");
-    pango_font_description_set_size(desc, fontSize * PANGO_SCALE);
+    /*
+     * We only need a tiny Cairo surface to create a Cairo/Pango context
+     * for measuring the text.
+     */
+    cairo_surface_t *measure_surface =
+        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+
+    cairo_t *measure_cr = cairo_create(measure_surface);
+
+    PangoLayout *layout =
+        pango_cairo_create_layout(measure_cr);
+
+    PangoFontDescription *desc =
+        pango_font_description_from_string("DejaVu Sans");
+
+    /*
+     * fontSize is assumed to be pixels.
+     *
+     * set_size() uses points.
+     * set_absolute_size() uses Pango units directly.
+     */
+    pango_font_description_set_absolute_size(
+        desc,
+        fontSize * PANGO_SCALE
+    );
+
     pango_layout_set_font_description(layout, desc);
     pango_layout_set_text(layout, text, length);
 
-    int w, h;
+    int w = 0;
+    int h = 0;
+
     pango_layout_get_pixel_size(layout, &w, &h);
+
     g_object_unref(layout);
-    cairo_destroy(tcr);
-    cairo_surface_destroy(tmp);
+    cairo_destroy(measure_cr);
+    cairo_surface_destroy(measure_surface);
 
     if (w <= 0 || h <= 0) {
         pango_font_description_free(desc);
         return NULL;
     }
 
-    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    /*
+     * Render the actual text.
+     */
+    cairo_surface_t *surface =
+        cairo_image_surface_create(
+            DRM_FORMAT_ARGB8888,
+            w,
+            h
+        );
+
+    cairo_status_t status =
+        cairo_surface_status(surface);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        pango_font_description_free(desc);
+        cairo_surface_destroy(surface);
+        return NULL;
+    }
+
     cairo_t *cr = cairo_create(surface);
+
+    if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {
+        pango_font_description_free(desc);
+        cairo_destroy(cr);
+        cairo_surface_destroy(surface);
+        return NULL;
+    }
+
+    /*
+     * Make sure the background is transparent.
+     */
+    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(cr);
+
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
     layout = pango_cairo_create_layout(cr);
+
     pango_layout_set_font_description(layout, desc);
     pango_layout_set_text(layout, text, length);
 
     cairo_set_source_rgba(cr, r, g, b, a);
+
     pango_cairo_show_layout(cr, layout);
+
     cairo_surface_flush(surface);
 
-    int stride = cairo_image_surface_get_stride(surface);
-    unsigned char *data = cairo_image_surface_get_data(surface);
+    int stride =
+        cairo_image_surface_get_stride(surface);
 
- //  struct wlr_readonly_data_buffer *ro_buffer = wlr_readonly_data_buffer_create(
- //       WL_SHM_FORMAT_ARGB8888, stride, w, h, data);
-    unsigned char *copy = malloc(stride * h);
-    memcpy(copy, data, stride * h);
-    struct wlr_buffer *buf = text_pixel_buffer_create(copy, WL_SHM_FORMAT_ARGB8888, w, h, stride);
+    unsigned char *surface_data =
+        cairo_image_surface_get_data(surface);
 
+    /*
+     * Cairo owns surface_data, so copy it into memory owned by
+     * our wlr_buffer.
+     */
+    size_t data_size = (size_t)stride * (size_t)h;
+
+    unsigned char *copy = malloc(data_size);
+
+    if (!copy) {
+        g_object_unref(layout);
+        pango_font_description_free(desc);
+        cairo_destroy(cr);
+        cairo_surface_destroy(surface);
+        return NULL;
+    }
+
+    memcpy(copy, surface_data, data_size);
+
+    struct wlr_buffer *buf =
+        text_pixel_buffer_create(
+            copy,
+            WL_SHM_FORMAT_ARGB8888,
+            w,
+            h,
+            stride
+        );
+
+    /*
+     * We no longer need the Cairo/Pango objects.
+     */
     g_object_unref(layout);
     pango_font_description_free(desc);
     cairo_destroy(cr);
     cairo_surface_destroy(surface);
 
     if (!buf) {
+        free(copy);
         return NULL;
     }
 
     struct wlr_scene_buffer *scene_buf =
         wlr_scene_buffer_create(ui->tree, buf);
+
+    /*
+     * wlr_scene_buffer_create() takes its own reference.
+     */
     wlr_buffer_drop(buf);
 
     return scene_buf;
 }
 
-static void DrawText(wm_clay_ui *ui, Clay_RenderCommand *cmd){
-    Clay_TextRenderData *text = &cmd->renderData.text;
-    struct wlr_scene_buffer *scene_buf = CreateTextNode(ui, text->stringContents.chars,
-        text->stringContents.length,
-        text->fontSize, text->textColor);
+static void DrawText(
+    wm_clay_ui *ui,
+    Clay_RenderCommand *cmd) {
 
-    wlr_scene_node_set_position(&scene_buf->node,
-        cmd->boundingBox.x, cmd->boundingBox.y);
+    Clay_TextRenderData *text =
+        &cmd->renderData.text;
+
+    struct wlr_scene_buffer *scene_buf =
+        CreateTextNode(
+            ui,
+            text->stringContents.chars,
+            text->stringContents.length,
+            text->fontSize,
+            text->textColor
+        );
+
+    if (!scene_buf) {
+        return;
+    }
+
+    wlr_scene_node_set_position(
+        &scene_buf->node,
+        cmd->boundingBox.x,
+        cmd->boundingBox.y
+    );
 }
 
+static inline Clay_Dimensions MeasureText(
+    Clay_StringSlice text,
+    Clay_TextElementConfig *config,
+    void *userData)
+{
+    if (!text.chars || text.length <= 0) {
+        return (Clay_Dimensions){0, 0};
+    }
+
+    cairo_surface_t *surface =
+        cairo_image_surface_create(
+            CAIRO_FORMAT_ARGB32,
+            1,
+            1
+        );
+
+    cairo_t *cr = cairo_create(surface);
+
+    PangoLayout *layout =
+        pango_cairo_create_layout(cr);
+
+    PangoFontDescription *desc =
+        pango_font_description_from_string("Sans");
+
+    pango_font_description_set_absolute_size(
+        desc,
+        config->fontSize * PANGO_SCALE
+    );
+
+    pango_layout_set_font_description(layout, desc);
+
+    pango_layout_set_text(
+        layout,
+        text.chars,
+        text.length
+    );
+
+    int w = 0;
+    int h = 0;
+
+    pango_layout_get_pixel_size(
+        layout,
+        &w,
+        &h
+    );
+
+    pango_font_description_free(desc);
+    g_object_unref(layout);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surface);
+
+    return (Clay_Dimensions){
+        .width = (float)w,
+        .height = (float)h
+    };
+}
+
+
 void WM_RenderClay(wm_clay_ui *ui, Clay_RenderCommandArray *commandArray){
+
+    Clay_SetMeasureTextFunction(*MeasureText, ui);
+
     for (int k=0;k<containerCount;k++){
         container *container = containers[k];
         for(int i=0;i<container->windowCount;i++){

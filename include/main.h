@@ -24,6 +24,8 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <pango/pango.h>
+
 #include "lib/clay.h"
 
 #ifndef MAIN_H
@@ -109,6 +111,7 @@ struct wm_clay_ui {
     struct wlr_scene_tree *tree;
     struct wl_list borders;
     struct wl_list rectangles;
+    PangoContext *pango_context;
 };
 
 enum { EDGE_TOP = 0, EDGE_RIGHT, EDGE_BOTTOM, EDGE_LEFT };

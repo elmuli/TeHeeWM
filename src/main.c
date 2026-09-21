@@ -26,6 +26,10 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <pango/pango.h>
+#include <pango/pangocairo.h>
+#include <cairo/cairo.h>
+
 #include "main.h"
 #include "lib/clay.h"
 
@@ -871,17 +875,19 @@ int main(int argc, char *argv[])
         return 1;
     }
     CreateContainer(containerLayoutConfigVertical());
-    printf("containers created and memory reserve");
+    printf("containers created and memory reserve\n");
 
     printf("Setting up CLAY\n");
 
-    Clay_SetMeasureTextFunction(measure_text, NULL);
+    printf("resering memory for clay\n");
 
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena clayMemory = (Clay_Arena) {
         .memory = malloc(totalMemorySize),
         .capacity = totalMemorySize
     };
+
+    printf("initializing clay\n");
 
     Clay_Initialize(clayMemory, (Clay_Dimensions) { 1920,  1080 }, (Clay_ErrorHandler) { 0 });
 
