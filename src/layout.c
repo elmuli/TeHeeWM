@@ -559,6 +559,8 @@ static void DrawText(
     Clay_TextRenderData *text =
         &cmd->renderData.text;
 
+    printf("text: %s\n", text->stringContents.chars);
+
     struct wlr_scene_buffer *scene_buf =
         CreateTextNode(
             ui,
