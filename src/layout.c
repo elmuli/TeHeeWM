@@ -445,6 +445,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
 
     if (w <= 0 || h <= 0) {
         pango_font_description_free(desc);
+        printf("text too small\n");
         return NULL;
     }
 
@@ -453,7 +454,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
      */
     cairo_surface_t *surface =
         cairo_image_surface_create(
-            DRM_FORMAT_ARGB8888,
+            CAIRO_FORMAT_ARGB32,
             w,
             h
         );
@@ -464,6 +465,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
     if (status != CAIRO_STATUS_SUCCESS) {
         pango_font_description_free(desc);
         cairo_surface_destroy(surface);
+        printf("cario status not success, %d\n", status);
         return NULL;
     }
 
@@ -473,6 +475,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
         pango_font_description_free(desc);
         cairo_destroy(cr);
         cairo_surface_destroy(surface);
+        printf("cario status not success\n");
         return NULL;
     }
 
@@ -514,6 +517,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
         pango_font_description_free(desc);
         cairo_destroy(cr);
         cairo_surface_destroy(surface);
+        printf("failed to copy\n");
         return NULL;
     }
 
@@ -522,7 +526,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
     struct wlr_buffer *buf =
         text_pixel_buffer_create(
             copy,
-            WL_SHM_FORMAT_ARGB8888,
+            DRM_FORMAT_ARGB8888,
             w,
             h,
             stride
@@ -538,6 +542,7 @@ static struct wlr_scene_buffer *CreateTextNode(wm_clay_ui *ui, const char *text,
 
     if (!buf) {
         free(copy);
+            printf("no buffer\n");
         return NULL;
     }
 
@@ -559,7 +564,6 @@ static void DrawText(
     Clay_TextRenderData *text =
         &cmd->renderData.text;
 
-    printf("text: %s\n", text->stringContents.chars);
 
     struct wlr_scene_buffer *scene_buf =
         CreateTextNode(
