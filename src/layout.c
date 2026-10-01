@@ -79,7 +79,7 @@ Clay_ElementDeclaration containerLayoutConfigHorizontal(){
 
 Clay_TextElementConfig normalTextConfig = (Clay_TextElementConfig){
     .fontId = 1,
-    .fontSize = 40, 
+    .fontSize = 20, 
     .textColor = (Clay_Color){255, 255, 255, 255},
     .wrapMode = CLAY_TEXT_WRAP_NEWLINES
 };
@@ -119,13 +119,43 @@ Clay_RenderCommandArray CreateClayLayout(){
         CLAY(CLAY_ID("testContainer"), {
             .layout = {
                 .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_FIXED(50)},
+                .sizing = {.width = CLAY_SIZING_GROW(1), .height = CLAY_SIZING_FIXED(30)},
                 .padding = CLAY_PADDING_ALL(3),
-                .childGap = 2
+                .childGap = 2,
+                .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER }
             },
             .backgroundColor = (Clay_Color){100, 10, 50, 255}
         }){
-            CLAY_TEXT(CLAY_STRING("test"), normalTextConfig);
+            CLAY(CLAY_ID("topLeft"),{
+                .layout = {
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .sizing = {.width = CLAY_SIZING_GROW(1)},
+                    .padding = CLAY_PADDING_ALL(0),
+                    .childGap = 10
+                },
+            }){
+                CLAY_TEXT(CLAY_STRING("test"), normalTextConfig);
+            };
+            CLAY(CLAY_ID("topMiddle"),{
+                .layout = {
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .sizing = {.width = CLAY_SIZING_GROW(1)},
+                    .padding = CLAY_PADDING_ALL(0),
+                    .childGap = 10
+                },
+            }){
+                CLAY_TEXT(CLAY_STRING("test2"), normalTextConfig);
+            };
+            CLAY(CLAY_ID("topRight"),{
+                .layout = {
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .sizing = {.width = CLAY_SIZING_GROW(1)},
+                    .padding = CLAY_PADDING_ALL(0),
+                    .childGap = 10
+                },
+            }){
+                CLAY_TEXT(CLAY_STRING("test2"), normalTextConfig);
+            }
         };
         CLAY(CLAY_ID("WindowContainer"), {
             .layout = {
@@ -176,8 +206,10 @@ void removeWindowFromArray(int index, int parentIndex) {
     }
 
     container->windowCount--;
+    printf("window count %i\n", container->windowCount);
 
     container->windows[container->windowCount]->toplevel = NULL;
+    
     if (container->windowCount == 0){
         removeContainerFromArray(parentIndex);
     }

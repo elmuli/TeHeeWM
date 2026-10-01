@@ -137,6 +137,132 @@ bool CheckBindAction(config *config, char *action, Key key){
     return false;
 }
 
+void CheckSections(const char *section, char **line, bool *inSection, int *sectionId){
+    printf("looking for sections\n");
+    if((section = strtok(*line, "{"))){
+        printf("section @%s@\n", section);
+        if(strstr(section, "window")){
+            printf("section found, @%s@\n", section);
+            *sectionId = 1;
+            *inSection = true;
+        }else if(strstr(section, "container")){
+            printf("section found, @%s@\n", section);
+            *sectionId = 2;
+            *inSection = true;
+        }else if(strstr(section, "binds")){
+            printf("section found, @%s@\n", section);
+            *sectionId = 3;
+            *inSection = true;
+        }
+    }
+}
+
+void CreteBorderConfig(config *Configuration, char **data, int sectionId, bool *inBorder){
+    if(strstr(*data, "true")) Configuration->windowBorder = true;
+    else if(strstr(*data, "false")) {Configuration->windowBorder = false;}
+    else if(strstr(*data, "size")){
+        char *tmp =  NULL;
+        if((tmp = strtok(*data, "("))){
+            printf("tmp: %s\n", tmp);
+            for(int i=0;i<3;i++){
+                char* value = NULL;
+                if((value = strtok(NULL, ","))){
+                    printf("value %s\n", value);
+                    if(sectionId == 1){
+                        Configuration->windowBorderSize[i] = atoi(value);
+                    }else if(sectionId == 2){
+                        Configuration->containerBorderSize[i] = atoi(value);
+                    }
+                }else{
+                    break;
+                }
+            }
+            char* value = NULL;
+            if((value = strtok(NULL, ")"))){
+                printf("value %s\n", value);
+                if(sectionId == 1){
+                    Configuration->windowBorderSize[3] = atoi(value);
+                }else if (sectionId == 2) {
+                    Configuration->containerBorderSize[3] = atoi(value);
+                }
+            }
+        }
+    }else if(strstr(*data, "rgba")){
+        char *tmp =  NULL;
+        if((tmp = strtok(*data, "("))){
+            printf("tmp: %s\n", tmp);
+            for(int i=0;i<3;i++){
+                char* value = NULL;
+                if((value = strtok(NULL, ","))){
+                    printf("value %s\n", value);
+                    if(sectionId == 1){
+                        Configuration->windowBorderColor[i] = atoi(value);
+                    }else if(sectionId == 2){
+                        Configuration->containerBorderColor[i] = atoi(value);
+                    }
+                }else{
+                    break;
+                }
+            }
+            char* value = NULL;
+            if((value = strtok(NULL, ")"))){
+                printf("value %s\n", value);
+                if(sectionId == 1){
+                    Configuration->windowBorderColor[3] = atoi(value);
+                }else if(sectionId == 2){
+                    Configuration->containerBorderColor[3] = atoi(value);
+                }
+            }
+        }
+    }else if(strstr(*data, "}")){
+        *inBorder = false;
+    }
+
+}
+
+int ReadKeyBinds(char **data_value, char **data, config *Configuration){
+    Key supportedKeys[53];
+    CreateKeyList(supportedKeys);
+
+    printf("check %s, %s\n", *data_value, *data);
+
+    if(supportedKeys == NULL) return 0;
+
+    char *m_key = NULL;
+    if(strstr(*data_value, "mod")){
+        printf("checking for modiefier keys\n");
+        for (int i=0;i<KEY_COUNT;i++){
+            if(!strcmp(*data, supportedKeys[i].name)){
+                printf("mod key: %s\n", data);
+                if(strstr(*data, "ALT")){
+                    Configuration->mod_key = WLR_MODIFIER_ALT;
+                }else if(strstr(*data, "SHIFT")){
+                    Configuration->mod_key = WLR_MODIFIER_SHIFT;
+                }else if(strstr(*data, "CTRL")){
+                    Configuration->mod_key = WLR_MODIFIER_CTRL;
+                }else if(strstr(*data, "SUPER")){
+                    //Configuration->mod_key = WLR_MODIFIER_SUPER;
+                }
+                break;
+            }
+        }
+    }else if((m_key = strtok(*data, "+"))){
+        printf("m_key: %s\n", m_key);
+        char *key = strtok(NULL, "+");
+        printf("key: %s\n", key);
+        if(strstr(m_key, "mod")){
+            printf("has mod key\n");
+            for (int i=0;i<KEY_COUNT;i++){
+                if(!strcmp(key, supportedKeys[i].name)){
+                    if(CheckBindAction(Configuration, *data_value, supportedKeys[i])) break;
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
 config* ReadConfigFile(const char* path){
     config *Configuration = malloc(sizeof(config));
     Configuration->keybind_count = 0;
@@ -152,30 +278,17 @@ config* ReadConfigFile(const char* path){
         bool inSection = false;
         bool inBorder = false;
 
-        char line[100];
+        char *line = malloc(100);
         char *section = NULL;
-        while(fgets(line, sizeof(line), config_file)){
+        while(fgets(line, 100, config_file)){
             printf("line %s\n", line);
             if(strstr(line, "#") || line[0] == '\0' || line[0] == '\n') continue;
             if(!inSection){
-                printf("looking for sections\n");
-                if((section = strtok(line, "{"))){
-                    printf("section %s\n", section);
-                    if(strstr(section, "window")){
-                        printf("section found, %s\n", section);
-                        sectionId = 1;
-                        inSection = true;
-                    }else if(strstr(section, "container")){
-                        printf("section found, %s\n", section);
-                        sectionId = 2;
-                        inSection = true;
-                    }else if(strstr(section, "binds")){
-                        printf("section found, %s\n", section);
-                        sectionId = 3;
-                        inSection = true;
-                    }
-                }
+                printf("not in section\n");
+                CheckSections(section, &line, &inSection, &sectionId);
+                printf("sectionId %i\n", sectionId);
             }else{
+                printf("in section\n");
                 char *data = NULL;
                 int value = 0;
                 if(strstr(line, "}")){
@@ -190,106 +303,15 @@ config* ReadConfigFile(const char* path){
                     printf("data_value: %s\n", data_value);
 
                     if(sectionId == 3){
-                        Key supportedKeys[53];
-                        CreateKeyList(supportedKeys);
-
-                        if(supportedKeys == NULL) return NULL;
-
-                        char *m_key = NULL;
-                        if(strstr(data_value, "mod")){
-                            printf("checking for modiefier keys\n");
-                            for (int i=0;i<KEY_COUNT;i++){
-                                if(!strcmp(data, supportedKeys[i].name)){
-                                    printf("mod key: %s\n", data);
-                                    if(strstr(data, "ALT")){
-                                        Configuration->mod_key = WLR_MODIFIER_ALT;
-                                    }else if(strstr(data, "SHIFT")){
-                                        Configuration->mod_key = WLR_MODIFIER_SHIFT;
-                                    }else if(strstr(data, "CTRL")){
-                                        Configuration->mod_key = WLR_MODIFIER_CTRL;
-                                    }else if(strstr(data, "SUPER")){
-                                        //Configuration->mod_key = WLR_MODIFIER_SUPER;
-                                    }
-                                    break;
-                                }
-                            }
-                        }else if((m_key = strtok(data, "+"))){
-                            printf("m_key: %s\n", m_key);
-                            char *key = strtok(NULL, "+");
-                            printf("key: %s\n", key);
-                            if(strstr(m_key, "mod")){
-                                printf("has mod key\n");
-                                for (int i=0;i<KEY_COUNT;i++){
-                                    if(!strcmp(key, supportedKeys[i].name)){
-                                        if(CheckBindAction(Configuration, data_value, supportedKeys[i])) break;
-                                    }
-                                }
-                            }
+                        if (!ReadKeyBinds(&data_value, &data, Configuration)){
+                            return NULL;
                         }
                     }else{
                         if(data_value != NULL) value = atoi(data_value);
                         printf("value: %i\n", value);
 
                         if(inBorder){
-                            if(strstr(data, "true")) Configuration->windowBorder = true;
-                            else if(strstr(data, "false")) {Configuration->windowBorder = false;}
-                            else if(strstr(data, "size")){
-                                char *tmp =  NULL;
-                                if((tmp = strtok(data, "("))){
-                                    printf("tmp: %s\n", tmp);
-                                    for(int i=0;i<3;i++){
-                                        char* value = NULL;
-                                        if((value = strtok(NULL, ","))){
-                                            printf("value %s\n", value);
-                                            if(sectionId == 1){
-                                                Configuration->windowBorderSize[i] = atoi(value);
-                                            }else if(sectionId == 2){
-                                                Configuration->containerBorderSize[i] = atoi(value);
-                                            }
-                                        }else{
-                                            break;
-                                        }
-                                    }
-                                    char* value = NULL;
-                                    if((value = strtok(NULL, ")"))){
-                                        printf("value %s\n", value);
-                                        if(sectionId == 1){
-                                            Configuration->windowBorderSize[3] = atoi(value);
-                                        }else if (sectionId == 2) {
-                                            Configuration->containerBorderSize[3] = atoi(value);
-                                        }
-                                    }
-                                }
-                            }else if(strstr(data, "rgba")){
-                                char *tmp =  NULL;
-                                if((tmp = strtok(data, "("))){
-                                    printf("tmp: %s\n", tmp);
-                                    for(int i=0;i<3;i++){
-                                        char* value = NULL;
-                                        if((value = strtok(NULL, ","))){
-                                            printf("value %s\n", value);
-                                            if(sectionId == 1){
-                                                Configuration->windowBorderColor[i] = atoi(value);
-                                            }else if(sectionId == 2){
-                                                Configuration->containerBorderColor[i] = atoi(value);
-                                            }
-                                        }else{
-                                            break;
-                                        }
-                                    }
-                                    char* value = NULL;
-                                    if((value = strtok(NULL, ")"))){
-                                        printf("value %s\n", value);
-                                        if(sectionId == 1){
-                                            Configuration->windowBorderColor[3] = atoi(value);
-                                        }else if(sectionId == 2){
-                                            Configuration->containerBorderColor[3] = atoi(value);
-                                        }
-                                    }
-                                }
-                            }else if(strstr(data, "}")){
-                                inBorder = false;
-                            }
+                            CreteBorderConfig(Configuration, &data, sectionId, &inBorder);
                         }else if(strstr(data, "border")){
                             inBorder = true;
                         }else {
