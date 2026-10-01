@@ -3,7 +3,9 @@
 My self made wayland tiling window manager. 
 
 This software is **not** made for use, it may have security issuse it is purely my own personal project.
-How ever you are welcome and look around to see what I have done. :D
+So I would advice against using it as your main WM, however you can try it out.
+You are welcome and look around to see what I have done. :D
+
 
 ## Bacround Info
 
