@@ -1,3 +1,17 @@
+# TeHeeWM
+
+My self made wayland tiling window manager. 
+
+This software is **not** made for use, it may have security issuse it is purely my own personal project.
+How ever you are welcome and look around to see what I have done. :D
+
+## Bacround Info
+
+this is my school project made for my course.
+
+This WM has been made using wlroots and CLAY as its primary librarys + some others.
+
+
 ### Day 1, 4.6.26
 
 sain ensimmäiset ikkunat avattaua ja luotuam oman version tinywl:stä
