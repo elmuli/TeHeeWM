@@ -25,6 +25,7 @@
 #include "main.h"
 #define CLAY_IMPLEMENTATION
 #include "lib/clay.h"
+#include "SysStats.h"
 
 
 Clay_ElementDeclaration containerLayoutConfigVertical(){
@@ -106,6 +107,8 @@ void ClayWindow(Clay_ElementId id){
 
 Clay_RenderCommandArray CreateClayLayout(){
 
+    frame_arena_reset();
+
     Clay_BeginLayout();
 
     CLAY(CLAY_ID("MainContainer"), {
@@ -131,7 +134,8 @@ Clay_RenderCommandArray CreateClayLayout(){
                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
                     .sizing = {.width = CLAY_SIZING_GROW(1)},
                     .padding = CLAY_PADDING_ALL(0),
-                    .childGap = 10
+                    .childGap = 10,
+                    .childAlignment = { .x = CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER}
                 },
             }){
                 CLAY_TEXT(CLAY_STRING("test"), normalTextConfig);
@@ -141,20 +145,25 @@ Clay_RenderCommandArray CreateClayLayout(){
                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
                     .sizing = {.width = CLAY_SIZING_GROW(1)},
                     .padding = CLAY_PADDING_ALL(0),
-                    .childGap = 10
+                    .childGap = 10,
+                    .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER}
                 },
             }){
-                CLAY_TEXT(CLAY_STRING("test2"), normalTextConfig);
+                char *text;
+                getTime(&text);
+                CLAY_TEXT(arena_fmt("%s", text), normalTextConfig);
             };
             CLAY(CLAY_ID("topRight"),{
                 .layout = {
                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
                     .sizing = {.width = CLAY_SIZING_GROW(1)},
                     .padding = CLAY_PADDING_ALL(0),
-                    .childGap = 10
+                    .childGap = 10,
+                    .childAlignment = { .x = CLAY_ALIGN_X_RIGHT, .y = CLAY_ALIGN_Y_CENTER}
                 },
             }){
-                CLAY_TEXT(CLAY_STRING("test2"), normalTextConfig);
+                int usage = getCpuPr();
+                CLAY_TEXT(arena_fmt("CPU: %d\%", usage), normalTextConfig);
             }
         };
         CLAY(CLAY_ID("WindowContainer"), {

@@ -7,7 +7,7 @@ LIBS!=$(PKG_CONFIG) --libs $(PKGS)
 
 INCL= -I./include/
 
-SRCS = src/main.c src/layout.c src/config_parser.c
+SRCS = src/main.c src/layout.c src/config_parser.c src/sysStas.c
 
 all:
 	gcc $(SRCS) -Werror $(CFLAGS) $(LDFLAGS) $(LIBS) $(INCL) -I. -DWLR_USE_UNSTABLE -o build/test
